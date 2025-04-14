@@ -1,0 +1,26 @@
+{
+  "name": "backend_researcher",
+  "version": "1.0.0",
+  "description": "University of Toronto Research Repository",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon index.js"
+  },
+  "author": "Jie Xuan Liu",
+  "license": "ISC",
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.17.1",
+    "@supabase/supabase-js": "^2.49.4",
+    "backend_researcher": "file:",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "pgvector": "^0.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
