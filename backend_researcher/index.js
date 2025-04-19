@@ -24,36 +24,47 @@ app.post('/auth/register', async (req, res) => {
     student_email,
     student_password,
     student_major,
-    student_firstName,
-    student_lastName,
+    student_firstname,
+    student_lastname,
     student_year,
-    student_acceptedTerms,
+    student_interests,
+    student_acceptedterms,
   } = req.body;
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    const { data: signUpData, error: authError } = await supabase.auth.signUp({
       email: student_email,
       password: student_password,
-      options: {
-        data: {
-          first_name: student_firstName,
-          last_name: student_lastName,
-          major: student_major,
-          year: student_year,
-          accepted_terms: student_acceptedTerms
-        },
-      },
     });
-
-    if (error) {
-      console.error('SignUp Error:', error);
-      return res.status(400).json({ message: error.message });
+    if (authError) {
+      return res.status(400).json({ message: authError.message });
     }
-    return res.status(200).json({ data });
 
-  } catch (error) {
-    console.error('Error during registration:', error);
-    return res.status(500).json({ message: 'An error occurred' });
+    const userId = signUpData.user.id;  
+
+    const { error: profileError } = await supabase
+      .from("User_Profiles")
+      .insert({
+        user_id: userId,
+        student_email: student_email,
+        student_major: student_major,
+        student_firstname: student_firstname,
+        student_lastname: student_lastname,
+        student_year: student_year,
+        student_interests: student_interests,   
+        student_acceptedterms: student_acceptedterms, 
+      });
+
+
+    if (profileError) {
+      await supabase.auth.admin.deleteUser(userId);
+      return res.status(400).json({ message: profileError.message });
+    }
+
+    return res.status(201).json({ user: signUpData.user });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
