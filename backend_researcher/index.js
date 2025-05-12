@@ -143,9 +143,11 @@ app.get('/kanban/get-all-or-create/:id', async (req, res) => {
             board = newBoard;  
         }
 
-      
+      if (authError) {
+          return res.status(400).json({ message: authError.message });
+      }
 
-        return res.status(200).json({ data: board });
+      return res.status(200).json({ data: board });
         
 
     } catch (error) {
