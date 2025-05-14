@@ -1,24 +1,42 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
+import cookieParser from 'cookie-parser'
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
+
 import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
 const port = 8080;
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true
+}));
+
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser())
 app.use(bodyParser.json());
+
+const GEMINI_KEY = process.env.GEMINI_API_KEY
+const OPENAI_KEY = process.env.OPENAI_API_KEY
+
+const GEMINI_AI = new GoogleGenAI({apiKey: GEMINI_KEY});
+// Temporary here for dev import in after from supabase.js module
+const OPEN_AI = new OpenAI({
+  apiKey: OPENAI_KEY
+});
+
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_ANON_KEY,
 );
 
-
 //Temporary Endpoints Make Modular
-
 app.post('/auth/register', async (req, res) => {
   const {
     student_email,
@@ -36,12 +54,19 @@ app.post('/auth/register', async (req, res) => {
       email: student_email,
       password: student_password,
     });
+
+    const research_input_embeddings = student_interests.join()
+
+    const embeddings = await OPEN_AI.embeddings.create({
+      model: "text-embedding-3-large",
+      input: research_input_embeddings
+    })
+
     if (authError) {
       return res.status(400).json({ message: authError.message });
     }
 
-    const userId = signUpData.user.id;  
-
+    const userId = signUpData.user.id;
     const { error: profileError } = await supabase
       .from("User_Profiles")
       .insert({
@@ -52,7 +77,8 @@ app.post('/auth/register', async (req, res) => {
         student_lastname: student_lastname,
         student_year: student_year,
         student_interests: student_interests,   
-        student_acceptedterms: student_acceptedterms, 
+        student_acceptedterms: student_acceptedterms,
+        student_embeddings: embeddings.data[0].embedding
       });
 
 
@@ -61,31 +87,184 @@ app.post('/auth/register', async (req, res) => {
       return res.status(400).json({ message: profileError.message });
     }
 
-    return res.status(201).json({ user: signUpData.user });
+    return res.status(201).json({ message: "Sucessfully Registered" });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ message: `Internal server error ${err}` });
+  }
+});
+
+app.post("/match-professors", async (req, res) => {
+  const { student_id, match_threshold = 0.20, match_count = 5 } = req.body;
+  try {
+    const { data, error } = await supabase
+      .rpc("match_professors_for_student", {
+        student_id,
+        match_threshold,
+        match_count,
+      });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.status(200).json({ matches: data });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/auth/refresh-jwt', async (req, res) => {
+  const { refreshToken } = req.body
+  try {
+
+  } catch {
+
+  }
+})
+
+app.post('/auth/verify-code', async (req, res) => {
+  const { email, code } = req.body;           
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token: code,
+      type: 'email'          
+    });                       
+
+    if (error) { 
+      return res.status(400).json({ message: error.message });
+    }
+
+    return res.status(200).json({ session: data.session, user: data.user });
+  } catch (err) {
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 app.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body
   try {
-    const { data, session, error: authError } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password
-    });
-    if (authError) {
-      console.error('Authentication Error:', authError);
-      return res.status(400).json({ message: authError.message });
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (authError || !data.session) {
+      console.error('Authentication Error:', authError)
+      return res.status(400).json({ message: authError?.message || 'Login failed' })
     }
 
-    return res.status(200).json({data: data, session: session})
+    const { access_token, refresh_token, expires_in } = data.session
+    res
+      .cookie('accesstoken', access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', //Change later in production
+        sameSite: 'lax',
+        secure: false,
+        maxAge: expires_in * 1000,
+        path: '/',
+      })
+      .cookie('refreshtoken', refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Change later in production
+        secure: false,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      })
+  
+
+      .status(200)
+      .json({"Result": "Success"})
+
   } catch (error) {
-    console.error('Error during login:', error);
-    return res.status(500).json({ message: 'An error occurred' });
+    console.error('Error during login:', error)
+    return res.status(500).json({ message: 'An error occurred' })
+  }
+})
+
+app.get('/auth/get-user', async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No Bearer token provided' });
+  }
+
+  const accessToken = authHeader.split(' ')[1];
+
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: authError?.message || 'Invalid user' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('User_Profiles') 
+      .select('*')
+      .eq('user_id', user.id)
+      .single(); 
+
+    if (profileError) {
+      return res.status(500).json({ error: profileError.message });
+    }
+
+    return res.status(200).json({ profile });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Unexpected server error' });
   }
 });
+
+app.get('/auth/get-user-id', async (req, res) => {
+  const accessToken = req.cookies['accesstoken']; 
+
+  if (!accessToken) {
+    return res.status(401).json({ error: 'No access token provided' });
+  }
+
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: authError?.message || 'Invalid user' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('User_Profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (profileError) {
+      return res.status(500).json({ error: profileError.message });
+    }
+
+    res
+      .cookie('user_id', profile.user_id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24, 
+        path: '/',
+      })
+      .status(200)
+      .json({ result: 'Success', user_id: profile.user_id });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Unexpected server error' });
+  }
+});
+
+
+
 
 app.post('/taishan', async (req, res) => {
   const { name, url, research_interests } = req.body;
@@ -103,7 +282,8 @@ app.post('/taishan', async (req, res) => {
 app.get('/taishan', async (req, res) => {
   const { data, error } = await supabase
     .from('Taishan')
-    .select('*');
+    .select('*')
+    .limit(10);
 
   if (error) {
     return res.status(400).json({ error: error.message });
@@ -133,29 +313,16 @@ app.get('/kanban/get-all-or-create/:id', async (req, res) => {
                     follow_up: []
                 }])
                 .single();  
-
-            
-
             if (insertError) {
                 return res.status(400).json({ message: insertError.message });
             }
-
             board = newBoard;  
         }
-
-      if (authError) {
-          return res.status(400).json({ message: authError.message });
-      }
-
-      return res.status(200).json({ data: board });
-        
-
+        return res.status(200).json({ data: board });
     } catch (error) {
         return res.status(500).json({ message: error.message });
     }
 });
-
-
 
 app.delete('/kanban/delete-in-progress/:id/:professorId', async (req, res) => {
   const userId = req.params.id;
@@ -249,8 +416,6 @@ app.post('/kanban/add-in-progress/:id', async (req, res) => {
   if (!professor_data) {
       return res.status(400).json({ message: 'Professor data is required.' });
   }
-
-  
 
   try {
       const { data: currentData, error: fetchError } = await supabase

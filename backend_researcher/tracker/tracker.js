@@ -42,8 +42,6 @@ router.get('/kanban/get-all-or-create/:id', async (req, res) => {
     }
 });
 
-
-
 router.delete('/kanban/delete-in-progress/:id/professorId', async (req, res) => {
     const userId = req.params.id
     const professorId = req.params.professorId
