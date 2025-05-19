@@ -409,6 +409,47 @@ app.put('/kanban/update-in-progress-to-completed/:userId/:professorId', async (r
   }
 });
 
+app.delete('/kanban/delete-in-progress/:user_id/:professor_id', async (req, res) => {
+  const userId = req.params.user_id;
+  const professorId = parseInt(req.params.professor_id);  // Ensure it's a number
+
+  try {
+    const { data, error: fetchError } = await supabase
+      .from('Applications')
+      .select('in_progress')
+      .eq('id', userId)
+      .single();
+    
+    if (fetchError) {
+      console.error(fetchError);
+      return res.status(500).json({ message: 'Failed to fetch in_progress' });
+    }
+
+    const currentInProgress = data.in_progress || [];
+
+    const updatedInProgress = currentInProgress.filter(
+      (prof) => prof.id !== professorId
+    );
+
+    const { error: updateError } = await supabase
+      .from('Applications')
+      .update({ in_progress: updatedInProgress })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error(updateError);
+      return res.status(500).json({ message: 'Failed to update in_progress' });
+    }
+
+    return res.status(200).json({ message: 'Professor removed successfully' });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Server error', error: err });
+  }
+});
+
+
 app.post('/kanban/add-in-progress/:id', async (req, res) => {
   const userId = req.params.id;
   const { professor_data } = req.body;
