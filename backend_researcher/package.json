@@ -18,9 +18,12 @@
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "email-reply-parser": "^2.0.1",
     "express": "^5.1.0",
     "googleapis": "^149.0.0",
+    "jsdom": "^26.1.0",
     "luxon": "^3.6.1",
+    "mailparser": "^3.7.3",
     "open": "^10.1.2",
     "pgvector": "^0.2.0"
   },

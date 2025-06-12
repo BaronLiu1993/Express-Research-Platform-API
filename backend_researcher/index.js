@@ -4,7 +4,10 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { createClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
+import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
+import EmailReplyParser from "email-reply-parser";
+import { simpleParser } from "mailparser";
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { DateTime } from "luxon";
@@ -50,23 +53,234 @@ const scopes = [
   "https://www.googleapis.com/auth/calendar",
 ];
 
-function makeBody(to, from, subject, message) {
-  const str = [
-    `From: ${from}`,
+//Helper Funcitons
+
+function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
+  const mimeMessage = [
     `To: ${to}`,
+    `From: ${fromName} <${fromEmail}>`,
     `Subject: ${subject}`,
-    "",
-    message,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `MIME-Version: 1.0`,
+    ``,
+    `${htmlMessage}`,
   ].join("\n");
 
-  const encodedMail = Buffer.from(str)
+  //Encode
+  return Buffer.from(mimeMessage)
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
-
-  return encodedMail;
 }
+
+function decodeBody(encoded) {
+  let padded = encoded;
+  while (padded.length % 4 !== 0) {
+    padded += "=";
+  }
+  padded = padded.replace(/-/g, "+").replace(/_/g, "/");
+  const buffer = Buffer.from(padded, "base64");
+  return buffer.toString("utf-8");
+}
+
+function extractHtmlOrPlainText(payload) {
+  if (!payload) return null;
+
+  if (
+    (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
+    payload.body?.data
+  ) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+
+  if (payload.parts && Array.isArray(payload.parts)) {
+    for (const part of payload.parts) {
+      const result = getLatestReply(part);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+app.get("/auth/github/:userId", (req, res) => {
+  const { userId } = req.params;
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const redirectURI = "http://localhost:8080/oauth/callback/github";
+  const scope = "repo";
+  return res.status(200).json({
+    link: `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectURI}&scope=${scope}&state=${userId}`,
+  });
+});
+
+app.get("/oauth/callback/github/", async (req, res) => {
+  const code = req.query.code;
+  const state = req.query.state;
+  const response = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      client_id: process.env.GITHUB_CLIENT_ID,
+      client_secret: process.env.GITHUB_CLIENT_SECRET,
+      code,
+    }),
+  });
+  const data = await response.json();
+  const accessToken = data.access_token;
+  const { error: insertionError } = await supabase
+    .from("User_Profiles")
+    .update({ github_token: accessToken })
+    .eq("user_id", state);
+
+  if (insertionError) {
+    return res.status(400).json({ message: "Failed To Insert" });
+  }
+
+  res.redirect(`http://localhost:3000/notion/build`);
+});
+
+app.post("/github/build-portfolio/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { resume } = req.body;
+
+  // Create simple HTML string (expand as needed)
+  const htmlContent = `
+  <html>
+    <head><title>${resume.name} Portfolio</title></head>
+    <body>
+      <h1>${resume.name}'s Portfolio</h1>
+      <p>Email: ${resume.contact_information.email}</p>
+    </body>
+  </html>
+  `;
+
+  try {
+    // Fetch GitHub token and user info from Supabase
+    const { data: tokenData, error: tokenFetchError } = await supabase
+      .from("User_Profiles")
+      .select("github_token, student_firstname, student_lastname")
+      .eq("user_id", userId)
+      .single();
+
+    if (tokenFetchError) {
+      console.error("Error fetching token from Supabase:", tokenFetchError);
+      return res.status(400).json({ message: "Failed To Fetch Token" });
+    }
+
+    const uuid = uuidv4();
+    const repoName = `portfolio-${uuid}`;
+
+    // Create GitHub repo
+    const repoRes = await fetch("https://api.github.com/user/repos", {
+      method: "POST",
+      headers: {
+        Authorization: `token ${tokenData.github_token}`,
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify({
+        name: repoName,
+        description: "Auto-Generated Portfolio Website",
+        private: false,
+        auto_init: true,
+      }),
+    });
+
+    if (!repoRes.ok) {
+      const err = await repoRes.json();
+      return res
+        .status(400)
+        .json({ message: "GitHub Repo Creation Failed", error: err });
+    }
+
+    const repo = await repoRes.json();
+
+    const username = repo.owner.login;
+
+    const encodedContent = Buffer.from(htmlContent).toString("base64");
+
+    const commitRes = await fetch(
+      `https://api.github.com/repos/${username}/${repoName}/contents/index.html`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${tokenData.github_token}`,
+          Accept: "application/vnd.github+json",
+        },
+        body: JSON.stringify({
+          message: "Add portfolio index.html",
+          content: encodedContent,
+        }),
+      }
+    );
+
+    if (!commitRes.ok) {
+      const err = await commitRes.json();
+      return res
+        .status(400)
+        .json({ message: "Failed to commit index.html", error: err });
+    }
+
+    const pagesRes = await fetch(
+      `https://api.github.com/repos/${username}/${repoName}/pages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `token ${tokenData.github_token}`,
+          Accept: "application/vnd.github+json",
+        },
+        body: JSON.stringify({
+          source: { branch: "main", path: "/" },
+        }),
+      }
+    );
+
+    const siteUrl = `https://${username}.github.io/${repoName}`;
+
+    const { error: insertionError } = await supabase
+      .from("User_Profiles")
+      .update({ github_pages_url: siteUrl })
+      .eq("user_id", userId);
+
+    if (insertionError) {
+      return res.status(400).json({ message: "Failed To Fetch Token" });
+    }
+
+    res.status(200).json({ message: "Portfolio Created", url: siteUrl });
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error", error });
+  }
+});
+
+//Tracking and Analytics
+//Change URL later so that it is less suspicious
+app.get("/track/:userId/:trackingId", async (req, res) => {
+  const { userId, trackingId } = req.params;
+
+  const { data: githubData, error: githubError } = await supabase
+    .from("User_Profiles")
+    .select("github_pages_url")
+    .eq("user_id", userId)
+    .single();
+
+  if (githubError) {
+    return res.status(404).send("Portfolio not found");
+  }
+  console.log(trackingId);
+  const { error: trackingError } = await supabase
+    .from("Messages")
+    .update({
+      opened: true,
+      opened_at: new Date(),
+    })
+    .eq("tracking_id", trackingId);
+
+  const { error } = await supabase.rpc("increment_emails_engaged_by_user", {
+    user_uuid: userId,
+  });
+
+  return res.redirect(githubData.github_pages_url);
+});
 
 app.get("/auth/gmail-data/:userId", (req, res) => {
   const userId = req.params.userId;
@@ -103,27 +317,98 @@ app.get("/auth/oauth2callback", async (req, res) => {
     }
     res.redirect("http://localhost:3000/inbox/email");
   } catch (error) {
-    console.error("Error getting tokens:", error);
     res.status(500).send("Authentication failed");
   }
 });
 
 app.post("/gmail/create-draft/:userId/:professorId", async (req, res) => {
+  //Data Required
   const { userId, professorId } = req.params;
-  const { to, from, subject, message } = req.body;
+  const { to, fromName, fromEmail, subject, message } = req.body;
 
-  if (!to || !from || !subject || !message) {
-    return res.status(400).json({ message: "Missing required fields" });
+  if (!to || !fromName || !fromEmail || !subject || !message) {
+    return res.status(400).json({});
   }
 
+  //Get Auth Tokens
   const { data: tokenData, error: fetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
     .eq("user_id", userId)
     .single();
 
+  //Failed If unable to get Data
   if (fetchError || !tokenData) {
-    return res.status(401).json({ error: "Token Fetch Error" });
+    return res.status(401).json({});
+  }
+
+  //Set credentials
+  oauth2Client.setCredentials({
+    access_token: tokenData.gmail_auth_token,
+    refresh_token: tokenData.gmail_refresh_token,
+  });
+
+  try {
+    await oauth2Client.getAccessToken();
+
+    //Create the body
+    const trackingId = uuidv4();
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const raw = makeBody(to, fromName, fromEmail, subject, message);
+    const draft = await gmail.users.drafts.create({
+      userId: "me",
+      requestBody: { message: { raw } },
+    });
+    const { error: insertionError } = await supabase.from("Emails").insert([
+      {
+        user_id: userId,
+        professor_id: parseInt(professorId),
+        draft_id: draft.data.id,
+        tracking_id: trackingId,
+      },
+    ]);
+
+    if (insertionError) {
+      return res.status(400).json({ message: "Insertion Error" });
+    }
+
+    return res.status(200).json({ draftId: draft.data.id });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.get("/gmail/resume-draft/:userId/:professorId", async (req, res) => {
+  //Params to get the draft data
+  const { userId, professorId } = req.params;
+
+  //Draft Data
+  const { data: draftData, error: draftFetchError } = await supabase
+    .from("Emails")
+    .select("draft_id")
+    .eq("user_id", userId)
+    .eq("professor_id", professorId)
+    .single();
+
+  if (draftFetchError || !draftData || !draftData.draft_id) {
+    return res.status(200).json({
+      draftExists: false,
+    });
+  }
+
+  const { data: tokenData, error: tokenFetchError } = await supabase
+    .from("User_Profiles")
+    .select("gmail_auth_token, gmail_refresh_token")
+    .eq("user_id", userId)
+    .single();
+
+  if (
+    tokenFetchError ||
+    !tokenData ||
+    !tokenData.gmail_auth_token ||
+    !tokenData.gmail_refresh_token
+  ) {
+    return res.status(404).json({});
   }
 
   oauth2Client.setCredentials({
@@ -133,178 +418,140 @@ app.post("/gmail/create-draft/:userId/:professorId", async (req, res) => {
 
   try {
     await oauth2Client.getAccessToken();
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const raw = makeBody(to, from, subject, message);
-    const draft = await gmail.users.drafts.create({
-      userId: "me",
-      requestBody: { message: { raw } },
-    });
 
-    const { error: insertionError } = await supabase.from("Emails").insert([
-      {
-        user_id: userId,
-        professor_id: parseInt(professorId),
-        draft_id: draft.data.id,
-      },
-    ]);
-
-    if (insertionError) {
-      console.error(insertionError);
-      return res.status(400).json({ message: "Unable to insert draft ID" });
-    }
-
-    return res.status(200).json({
-      message: "Draft created and stored successfully",
-      draftId: draft.data.id,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
-app.get("/gmail/resume-draft/:userId/:professorId", async (req, res) => {
-  const { userId, professorId } = req.params;
-
-  const { data: draftData, error: draftFetchError } = await supabase
-    .from("Emails")
-    .select("draft_id")
-    .eq("user_id", userId)
-    .eq("professor_id", professorId)
-    .single();
-
-  if (draftFetchError || !draftData) {
-    return res.status(200).json({ message: "Draft not found. We need to create a new one." });
-  }
-
-  const { data: tokenData, error: tokenFetchError } = await supabase
-    .from("User_Profiles")
-    .select("gmail_auth_token", "gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
-
-  if (tokenFetchError || !tokenData) {
-    return res.status(404).json({ error: "Token not found" });
-  }
-
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token
-  });
-
-  try {
-    await oauth2Client.getAccessToken();
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
-      format: "full"
     });
 
+    console.log(decodeBody(draft.data.message.payload.body.data));
+
+    //Parsing the payload and breaking it down
     const payload = draft.data.message.payload;
-    const headers = payload.headers;
+    const headers = payload.headers || [];
+    const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    const htmlBody = extractHtmlOrPlainText(payload);
 
-    const subject = headers.find(h => h.name === "Subject")?.value || "";
-    const part = payload.parts?.find(p => p.mimeType === "text/plain");
-    const messageBase64 = part?.body?.data || payload.body?.data || "";
-    const message = Buffer.from(messageBase64, "base64").toString("utf8");
-
-    return res.status(200).json({ subject, message });
-
+    return res.status(200).json({
+      draftExists: true,
+      subject: subject,
+      body: htmlBody,
+    });
   } catch (error) {
-
-    if (error.response.data.error.code === 401) {
-      return res.status(200).json({ message: "Gmail draft not found. Compose a new one!" });
+    if (error.response?.data?.error?.code === 401) {
+      return res.status(200).json({ draftExists: false });
     }
 
-    return res.status(500).json({ message: "Internal Server Error" });
+    return res.status(500).json({ draftExists: false });
   }
 });
 
-app.post("/gmail/update-draft/:userId/:professorId", async (req, res) => {
-  const {userId, professorId} = req.params
+app.put("/gmail/update-draft/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  const { to, fromName, fromEmail, subject, body } = req.body;
   const { data: draftData, error: draftFetchError } = await supabase
     .from("Emails")
     .select("draft_id")
     .eq("user_id", userId)
     .eq("professor_id", professorId)
-    .single()
-  
-  if (!draftData || draftFetchError) {
-    return res.status(401).json({message: "No Draft Found"})
+    .single();
+  if (!draftData || draftFetchError || !draftData.draft_id) {
+    return res.status(401).json({ updated: false });
   }
-  
+
   const { data: tokenData, error: tokenFetchError } = await supabase
-      .from("User_Profiles")
-      .select("gmail_auth_token, refresh_auth_token")
-      .eq("user_id", userId)
-      .single()
-  
+    .from("User_Profiles")
+    .select("gmail_auth_token, gmail_refresh_token")
+    .eq("user_id", userId)
+    .single();
+
   if (!tokenData || tokenFetchError) {
-    return res.status(401).json({message: "Token not found"})
+    return res.status(401).json({ updated: false });
   }
 
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.refresh_auth_token
-  })
+    refresh_token: tokenData.gmail_refresh_token,
+  });
+
+  const raw = makeBody(to, fromName, fromEmail, subject, body);
   try {
-    await oauth2Client.getAccessToken()
-    const gmail = google.gmail({version: "v1", auth: oauth2Client})
-    const updateGmail = await gmail.users.drafts.update({
+    await oauth2Client.getAccessToken();
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+    const draft = await gmail.users.drafts.update({
       userId: "me",
       id: draftData.draft_id,
-      
-    })
-    
-      
-  } catch {
-    return res.status(500).json({message: "Internal Server Error"})
+      requestBody: { message: { raw } },
+    });
+
+    return res.status(200).json({ updated: true });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ updated: false });
   }
-})
+});
+
+app.get("/tracking/open/:trackingId", (req, res) => {});
 
 app.post(
-  "/gmail/gcalendar/send-draft-follow/:userId/:draftId",
+  "/gmail/gcalendar/send-draft/:userId/:professorId",
   async (req, res) => {
-    const draftId = req.params.draftId;
-    const userId = req.params.userId;
-    const { data: tokenData, error: fetchError } = await supabase
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
+    // Get userId, professorId, timeZone, eventName and description
+    const { userId, professorId } = req.params;
+    const { timeZone, eventName, description } = req.body;
 
-    if (fetchError || !tokenData) {
-      return res.status(401).json({ error: "Fetch Error" });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
     try {
+      const { data: tokenData, error: tokenFetchError } = await supabase
+        .from("User_Profiles")
+        .select("gmail_auth_token, gmail_refresh_token")
+        .eq("user_id", userId)
+        .single();
+
+      if (tokenFetchError || !tokenData) {
+        return res.status(400).json({});
+      }
+
+      const { data: draftIdData, error: draftIdFetchError } = await supabase
+        .from("Emails")
+        .select("draft_id, tracking_id")
+        .eq("user_id", userId)
+        .eq("professor_id", professorId)
+        .single();
+
+      if (draftIdFetchError || !draftIdData || !draftIdData.draft_id) {
+        return res.status(404).json({});
+      }
+
+      oauth2Client.setCredentials({
+        access_token: tokenData.gmail_auth_token,
+        refresh_token: tokenData.gmail_refresh_token,
+      });
+
       await oauth2Client.getAccessToken();
-      const calendar = google.calendar({ version: "v3", auth: oauth2Client });
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+      const sendResponse = await gmail.users.drafts.send({
+        userId: "me",
+        requestBody: {
+          id: draftIdData.draft_id,
+        },
+      });
+
       const startTime = DateTime.now()
         .setZone(timeZone)
         .plus({ days: 7 })
         .set({ hour: 12, minute: 0, second: 0 })
         .toISO();
       const endTime = DateTime.fromISO(startTime).plus({ hours: 1 }).toISO();
-
       const event = {
         summary: eventName,
-        description: description,
-        start: {
-          dateTime: startTime,
-          timeZone: timeZone,
-        },
-        end: {
-          dateTime: endTime,
-          timeZone: timeZone,
-        },
+        description,
+        start: { dateTime: startTime, timeZone },
+        end: { dateTime: endTime, timeZone },
         reminders: {
           useDefault: false,
           overrides: [
@@ -313,48 +560,171 @@ app.post(
           ],
         },
       };
+      await calendar.events.insert({ calendarId: "primary", resource: event });
 
-      const invitiationResponse = await calendar.events.insert({
-        calendarId: "primary",
-        resource: event,
-      });
+      const { data: inProgressData, error: inProgressFetchError } =
+        await supabase
+          .from("InProgress")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("professor_id", professorId)
+          .single();
 
-      const sendResponse = await gmail.users.drafts.send({
-        userId: "me",
-        requestBody: {
-          id: draftId,
-        },
-      });
-      const { error: insertionError } = await supabase
-        .from("Emails")
-        .insert([{ email_id: sendResponse.data.id, sent_at: Date.now() }])
-        .select();
-
-      if (insertionError) {
-        return res.status(400).json({ message: "Insertion Error" });
+      if (!inProgressFetchError) {
+        await supabase.from("Completed").insert({ ...inProgressData });
+        await supabase
+          .from("InProgress")
+          .delete()
+          .match({ user_id: userId, professor_id: professorId });
       }
 
-      return res.status(200).json({ message: "Inserted Successfully" });
-    } catch {
-      return res.status(500).json({ message: "Internal Server Error" });
+      await supabase
+        .from("Emails")
+        .update({
+          thread_id: sendResponse.data.threadId,
+          sent_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId)
+        .eq("professor_id", professorId);
+      await supabase.from("Messages").insert({
+        thread_id: sendResponse.data.threadId,
+        message_id: sendResponse.data.id,
+        tracking_id: draftIdData.tracking_id,
+      });
+
+      const { error: insertionError } = await supabase
+        .from("Key_Performance_Indicators")
+        .update({})
+        .eq("user_id", userId)
+        .increment({ emails_sent: 1 });
+
+      return res.status(200).json({});
+    } catch (err) {
+      return res.status(500).json({});
     }
   }
 );
 
-app.get("/gmail/emails/:userId", async (req, res) => {
+app.post(
+  "/gmail/gcalendar/follow-up-reply/:userId/:professorId",
+  async (req, res) => {
+    const { userId, professorId } = req.params;
+    const { body, subject } = req.body;
+
+    const { error: insertionError } = await supabase
+      .from("Key_Performance_Indicators")
+      .update({})
+      .eq("user_id", userId)
+      .increment({ follow_up_emails: 1 });
+  }
+);
+
+app.get("/gmail/get-engagement/:threadId/:messageId", async (req, res) => {
+  const { threadId, messageId } = req.params;
+  try {
+    const { data: messageData, error: messageDataError } = await supabase
+      .from("Messages")
+      .select("opened, opened_at")
+      .eq("thread_id", threadId)
+      .eq("message_id", messageId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ opened: false, opened_at: "Not Opened" });
+    }
+
+    return res
+      .status(200)
+      .json({ opened: messageData.opened, opened_at: messageData.opened_at });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.get("/gmail/get-status/:threadId/", async (req, res) => {
+  const { threadId } = req.params;
+  try {
+    const { data: messageData, error: messageDataError } = await supabase
+      .from("Emails")
+      .select("status")
+      .eq("thread_id", threadId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
+    }
+    const data = messageData.status;
+    return res.status(200).json({ data });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.put("/gmail/update-status/:threadId/", async (req, res) => {
+  const { threadId } = req.params;
+  const { value } = req.body;
+  try {
+    const { error: messageDataError } = await supabase
+      .from("Emails")
+      .update({ status: value })
+      .eq("thread_id", threadId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ message: "Failed to Insert" });
+    }
+    return res.status(200).json({ message: "Successfully Inserted" });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+//get first and second only
+app.get("/gmail/get-email-chain/:userId", async (req, res) => {
   const { userId } = req.params;
 
-  const { data: tokenData, error: fetchError } = await supabase
+  const { data: completedData, error: completedFetchError } = await supabase
+    .from("Completed")
+    .select("professor_id")
+    .eq("user_id", userId);
+
+  if (completedFetchError || !completedData?.length) {
+    return res
+      .status(401)
+      .json({ error: "Error fetching completed professors" });
+  }
+
+  const completedProfessorIds = completedData.map((row) => row.professor_id);
+  console.log(completedProfessorIds);
+  const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
     .eq("user_id", userId)
     .single();
 
-  if (fetchError || !tokenData) {
-    return res.status(401).json({ error: "Fetch Error" });
+  if (tokenFetchError || !tokenData) {
+    return res.status(401).json({ error: "Token fetch error" });
   }
 
-  //Initialise Client
+  const { data: threadData, error: threadFetchError } = await supabase
+    .from("Emails")
+    .select("thread_id")
+    .eq("user_id", userId)
+    .in("professor_id", completedProfessorIds);
+
+  if (threadFetchError || !threadData?.length) {
+    return res.status(401).json({ error: "Thread fetch error" });
+  }
+  const allThreadIds = threadData.map((row) => row.thread_id);
+
+  const { data: professorData, error: professorFetchError } = await supabase
+    .from("Taishan")
+    .select("name")
+    .in("id", completedProfessorIds);
+
+  if (professorFetchError || !professorData) {
+    return res.status(401).json({ error: "Professor Data fetch error" });
+  }
+
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
     refresh_token: tokenData.gmail_refresh_token,
@@ -364,59 +734,98 @@ app.get("/gmail/emails/:userId", async (req, res) => {
     await oauth2Client.getAccessToken();
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    const response = await gmail.users.messages.list({
+    const threadArray = [];
+    for (let i = 0; i < allThreadIds.length; i++) {
+      const thread = await gmail.users.threads.get({
+        userId: "me",
+        id: allThreadIds[i],
+      });
+      const headers = thread.data.messages[0].payload.headers || [];
+      const subject = headers.find((h) => h.name === "Subject")?.value || "";
+      const date = headers.find((h) => h.name === "Date")?.value || "";
+      const body = decodeBody(thread.data.messages[0].payload.body.data);
+      const threadObject = {
+        threadId: allThreadIds[i],
+        messageId: thread.data.messages[0].id,
+        thread_title: `${professorData[i].name}`,
+        firstMessageData: {
+          subject: `${subject.slice(0, 40)}...`,
+          date: date,
+          body: `${body.slice(0, 40)}...`,
+        },
+      };
+      threadArray.push(threadObject);
+    }
+
+    return res.status(200).json({ threadArray });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to fetch Gmail thread." });
+  }
+});
+
+app.get("/gmail/get-full-email-chain/:userId/:threadId", async (req, res) => {
+  const { userId, threadId } = req.params;
+  const { data: tokenData, error: tokenFetchError } = await supabase
+    .from("User_Profiles")
+    .select("gmail_auth_token, gmail_refresh_token")
+    .eq("user_id", userId)
+    .single();
+
+  if (tokenFetchError || !tokenData) {
+    return res.status(401).json({ error: "Token fetch error" });
+  }
+  oauth2Client.setCredentials({
+    access_token: tokenData.gmail_auth_token,
+    refresh_token: tokenData.gmail_refresh_token,
+  });
+  try {
+    await oauth2Client.getAccessToken();
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const threadData = await gmail.users.threads.get({
       userId: "me",
-      maxResults: 10,
+      id: threadId,
     });
 
-    const messages = response.data.messages || [];
+    const messageArray = [];
+    const messages = threadData?.data?.messages || [];
+    const messagesLength = messages.length;
 
-    const fullMessages = await Promise.all(
-      messages.map(async (msg) => {
-        const fullMsg = await gmail.users.messages.get({
-          userId: "me",
-          id: msg.id,
-          format: "full",
-        });
+    for (let i = 0; i < messagesLength; i++) {
+      const message = threadData.data.messages[i];
+      const labels = messages[i].labelIds || [];
+      console.log(labels);
+      const messageData = await gmail.users.messages.get({
+        userId: "me",
+        id: message.id,
+        format: "raw",
+      });
 
-        const payload = fullMsg.data.payload;
-        const headers = payload.headers || [];
+      const response = await simpleParser(decodeBody(messageData.data.raw));
+      const email = new EmailReplyParser().read(response.text);
+      const body = email.getVisibleText();
+      const toObj = response.to.value;
+      const to = toObj[0];
+      const fromObj = response.from.value;
+      const from = fromObj[0];
+      const subject = response.subject;
+      const date = response.date;
 
-        const subject = headers.find((h) => h.name === "Subject")?.value || "";
+      const messageObj = {
+        labels,
+        to,
+        from,
+        subject,
+        body,
+        date,
+      };
 
-        const fromHeader = headers.find((h) => h.name === "From")?.value || "";
-        const fromMatch = fromHeader.match(/^(.*?)(?:\s*<(.+?)>)?$/);
-        const fromName = fromMatch?.[1]?.trim() || "";
-        const fromEmail = fromMatch?.[2]?.trim() || "";
+      messageArray.push(messageObj);
+    }
 
-        const dateHeader = headers.find((h) => h.name === "Date")?.value || "";
-        const receivedAt = new Date(dateHeader).toISOString();
-
-        const bodyData = payload.parts?.find(
-          (part) => part.mimeType === "text/plain"
-        )?.body?.data;
-
-        const body = bodyData
-          ? Buffer.from(bodyData, "base64").toString("utf-8")
-          : "";
-
-        return {
-          id: msg.id,
-          subject,
-          from: {
-            name: fromName,
-            email: fromEmail,
-          },
-          receivedAt,
-          body,
-        };
-      })
-    );
-
-    return res.status(200).json({ emails: fullMessages });
+    return res.status(200).json({ messageArray });
   } catch (err) {
-    console.error("Failed to fetch emails:", err);
-    return res.status(500).json({ message: "Failed to Fetch Emails." });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -438,7 +847,6 @@ app.post("/gmail/send-later/:userId", async (req, res) => {
   });
 
   try {
-    await oauth2Client.getAccessToken();
   } catch {}
 });
 
@@ -489,28 +897,15 @@ app.post("/auth/register", async (req, res) => {
         student_motivation: student_motivation,
       });
 
+    const { error: dataError } = await supabase
+      .from("Key_Performance_Indicators")
+      .insert({
+        user_id: userId,
+      });
+
     if (profileError) {
       await supabase.auth.admin.deleteUser(userId);
       return res.status(400).json({ message: profileError.message });
-    }
-
-    const { data: newBoard, error: insertError } = await supabase
-      .from("Applications")
-      .insert([
-        {
-          user_id: userId,
-          in_complete: [],
-          in_progress: [],
-          completed: [],
-          follow_up: [],
-        },
-      ])
-      .single();
-
-    if (insertError) {
-      return res
-        .status(400)
-        .json({ message: "Could not create application board." });
     }
 
     return res.status(201).json({ message: "Sucessfully Registered" });
@@ -781,7 +1176,6 @@ app.get("/kanban/get/:id", async (req, res) => {
       .single();
 
     if (error) {
-      console.log("❌ Error fetching board:", error.message);
       return res
         .status(400)
         .json({ message: "Unable to fetch application board." });
@@ -800,350 +1194,452 @@ app.get("/kanban/get/:id", async (req, res) => {
 });
 
 //KANBAN STARTS HERE
+app.get("/kanban/get-followup/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: completedData, error: completedFetchError } = await supabase
+      .from("Completed")
+      .select("*")
+      .eq("user_id", userId)
+      .limit(10);
 
-//In Progress KANBAN Starts Here
+    if (completedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
+    }
 
-// Keep this, merge it with the apply button and make it so when someone clicks it
-// The data is added to is complete or if it is already saved, it moves it from saved to is complete
-// and if it is completed then render back you have already applied here, do you want to follow up perhaps
-// and move to follow up and then create email again with follow up and create separate llm agent for that
-app.post("/kanban/add-in-progress/:userId", async (req, res) => {
-  const userId = req.params.userId;
-  const { professor_data: newProfessorData } = req.body;
+    return res.status(200).json({ data: completedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
 
-  // Validate incoming data
-  if (!newProfessorData || !newProfessorData.id) {
-    return res
-      .status(400)
-      .json({ message: "Professor data and ID are required." });
+app.post("/kanban/add-followup/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  const {
+    name,
+    email,
+    url,
+    lab_url,
+    research_interests,
+    labs,
+    department,
+    faculty,
+    school,
+    comments,
+  } = req.body;
+
+  if (!userId || !professorId) {
+    return res.status(400).json({ message: "Frontend Error" });
   }
 
-  // Declare professorIdToMove here, before its first use
-  const professorIdToMove = newProfessorData.id;
+  try {
+    // Insert into completed
+
+    // delete from in progress
+    const { error: inProgressDeletionError } = await supabase
+      .from("InProgress")
+      .delete()
+      .eq("user_id", userId)
+      .eq("professor_id", professorId);
+
+    if (inProgressDeletionError) {
+      return res.status(400).json({ message: "Failed to delete" });
+    }
+
+    return res
+      .status(200)
+      .json({ message: "Professor successfully added to 'Completed' column." });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.delete("/kanban/delete-followup/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  try {
+    const { error: deletionError } = await supabase
+      .from("Completed")
+      .delete()
+      .eq("user_id", userId)
+      .eq("professor_id", professorId);
+
+    if (deletionError) {
+      return res.status(400).json({ message: "Failed to delete" });
+    }
+    return res.status(200).json({ message: "Delete Successful" });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// Completed Section of Kanban
+app.get("/kanban/get-completed/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: completedData, error: completedFetchError } = await supabase
+      .from("Completed")
+      .select("*")
+      .eq("user_id", userId)
+      .limit(10);
+
+    if (completedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
+    }
+
+    return res.status(200).json({ data: completedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
+
+app.get("/kanban/get-completed-professor-ids/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: completedData, error: completedFetchError } = await supabase
+      .from("Completed")
+      .select("professor_id")
+      .eq("user_id", userId)
+      .limit(10);
+    if (completedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
+    }
+
+    return res.status(200).json({ data: completedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
+
+app.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+
+  if (!userId || !professorId) {
+    return res.status(400).json({ message: "Frontend Error" });
+  }
 
   try {
-    // Fetch current application data for the user
-    const { data: tableData, error: fetchError } = await supabase
-      .from("Applications")
-      .select("in_complete, in_progress, completed, follow_up")
+    // Insert into completed
+    const { data: inProgressData, error: inProgressFetchError } = await supabase
+      .from("InProgress")
+      .select("*")
       .eq("user_id", userId)
+      .eq("professor_id", professorId)
       .single();
 
-    if (fetchError) {
-      console.error("Supabase fetch error:", fetchError);
-      return res
-        .status(500)
-        .json({ message: "Failed to retrieve user application data." });
+    if (inProgressFetchError) {
+      return res.status(400).json({ message: "fetch error" });
     }
-
-    // Fetch applied professors from User_Profiles
-    const { data: appliedData, error: appliedError } = await supabase
-      .from("User_Profiles")
-      .select("applied_professors")
-      .eq("user_id", userId)
+    const { error: completedInsertionError } = await supabase
+      .from("Completed")
+      .insert({
+        user_id: inProgressData.user_id,
+        professor_id: inProgressData.professor_id,
+        name: inProgressData.name,
+        email: inProgressData.email,
+        url: inProgressData.url,
+        lab_url: inProgressData.lab_url,
+        labs: inProgressData.labs,
+        department: inProgressData.department,
+        faculty: inProgressData.faculty,
+        school: inProgressData.school,
+        research_interests: inProgressData.research_interests,
+        comments: inProgressData.comments,
+      })
       .single();
 
-    if (appliedError) {
-      console.error("Supabase fetch error:", appliedError);
+    if (completedInsertionError) {
       return res
-        .status(500)
-        .json({ message: "Failed to retrieve user profile data." });
+        .status(400)
+        .json({ message: "Failed to update application columns." });
     }
 
-    // Update applied_professors list in User_Profiles
-    let currentAppliedProfessors = appliedData.applied_professors || [];
-    // Ensure no duplicates before adding to applied_professors
-    if (!currentAppliedProfessors.includes(professorIdToMove)) {
-      currentAppliedProfessors.push(professorIdToMove);
+    // delete from in progress
+    const { error: inProgressDeletionError } = await supabase
+      .from("InProgress")
+      .delete()
+      .eq("user_id", userId)
+      .eq("professor_id", professorId);
+
+    if (inProgressDeletionError) {
+      return res.status(400).json({ message: "Failed to delete" });
     }
 
-    const { error: userProfileUpdateError } = await supabase
-      .from("User_Profiles")
-      .update({
-        applied_professors: currentAppliedProfessors,
-      })
-      .eq("user_id", userId);
-
-    if (userProfileUpdateError) {
-      console.error("Supabase update error:", userProfileUpdateError);
-      return res.status(500).json({
-        message: "Failed to update user profile's applied professors.",
-        error: userProfileUpdateError.message,
-      });
-    }
-
-    // Initialize kanban columns from fetched data
-    let inComplete = tableData.in_complete || [];
-    let inProgress = tableData.in_progress || [];
-    let completed = tableData.completed || [];
-    let followUp = tableData.follow_up || [];
-
-    // Check if the professor is already in the 'In Progress' column
-    const isAlreadyInProgress = inProgress.some(
-      (prof) => prof.id === professorIdToMove
-    );
-
-    if (isAlreadyInProgress) {
-      return res.status(409).json({
-        message: "This professor is already in the 'In Progress' column.",
-      });
-    }
-
-    // Remove the professor from other columns if present
-    inComplete = inComplete.filter((prof) => prof.id !== professorIdToMove);
-    completed = completed.filter((prof) => prof.id !== professorIdToMove);
-    followUp = followUp.filter((prof) => prof.id !== professorIdToMove);
-
-    // Add the new professor data to 'In Progress' with a timestamp
-    const professorWithTimestamp = {
-      ...newProfessorData,
-      added_at: new Date().toISOString(),
-    };
-    inProgress = [...inProgress, professorWithTimestamp];
-
-    // Update the Applications table with the modified columns
-    const { error: updateError } = await supabase
-      .from("Applications")
-      .update({
-        in_complete: inComplete,
-        in_progress: inProgress,
-        completed: completed,
-        follow_up: followUp,
-      })
-      .eq("user_id", userId);
-
-    if (updateError) {
-      console.error("Supabase update error:", updateError);
-      return res.status(500).json({
-        message: "Failed to update application columns.",
-        error: updateError.message,
-      });
-    }
-
-    return res.status(200).json({
-      message: "Professor successfully moved to 'In Progress' column.",
-    });
-  } catch (error) {
-    console.error("Server error in /kanban/add-in-progress:", error);
     return res
-      .status(500)
-      .json({ message: "Internal Server Error", error: error.message });
+      .status(200)
+      .json({ message: "Professor successfully added to 'Completed' column." });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.delete(
+  "/kanban/delete-completed/:userId/:professorId",
+  async (req, res) => {
+    const { userId, professorId } = req.params;
+    try {
+      const { error: deletionError } = await supabase
+        .from("Completed")
+        .delete()
+        .eq("user_id", userId)
+        .eq("professor_id", professorId);
+
+      if (deletionError) {
+        return res.status(400).json({ message: "Failed to delete" });
+      }
+
+      return res.status(200).json({ message: "Delete Successful" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  }
+);
+
+//In Progress KANBAN Starts Here
+app.get("/kanban/get-in-progress/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: savedData, error: savedFetchError } = await supabase
+      .from("InProgress")
+      .select("*")
+      .eq("user_id", userId)
+      .limit(10);
+
+    if (savedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
+    }
+
+    return res.status(200).json({ data: savedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
+
+app.post("/kanban/add-in-progress/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  const {
+    name,
+    email,
+    url,
+    lab_url,
+    research_interests,
+    labs,
+    department,
+    faculty,
+    school,
+  } = req.body;
+
+  if (!userId || !professorId) {
+    return res.status(400).json({ message: "Frontend Error" });
+  }
+
+  try {
+    const { data: savedData, error: fetchSavedError } = await supabase
+      .from("Saved")
+      .select("comments, professorId")
+      .eq("professor_id", professorId)
+      .eq("user_id", userId);
+
+    let comments = "";
+
+    // Remove from Saved if it exists
+    if (savedData?.length > 0) {
+      const { error: savedDataDeletionError } = await supabase
+        .from("Saved")
+        .delete()
+        .eq("professor_id", professorId)
+        .eq("user_id", userId);
+
+      comments = savedData.comments;
+      if (savedDataDeletionError) {
+        return res
+          .status(400)
+          .json({ message: "Error In Deleting Duplicate Row" });
+      }
+    }
+
+    // Insert into InProgress
+    const { error: inProgressInsertionError } = await supabase
+      .from("InProgress")
+      .insert({
+        user_id: userId,
+        professor_id: professorId,
+        name,
+        email,
+        url,
+        lab_url,
+        labs,
+        department,
+        faculty,
+        school,
+        research_interests,
+        comments,
+      })
+      .single();
+
+    if (inProgressInsertionError) {
+      return res
+        .status(400)
+        .json({ message: "Failed to update application columns." });
+    }
+
+    // Fetch user profile
+    const { data: profileData, error: profileFetchError } = await supabase
+      .from("User_Profiles")
+      .select("applied_professors, saved_professors")
+      .eq("user_id", userId)
+      .single();
+
+    if (profileFetchError) {
+      return res.status(400).json({ message: "Could not fetch profile data." });
+    }
+
+    const currentSaved = profileData.saved_professors ?? [];
+    const currentApplied = profileData.applied_professors ?? [];
+
+    const alreadySaved = currentSaved.includes(professorId);
+    const newApplied = [...currentApplied, professorId];
+
+    if (alreadySaved) {
+      const newSaved = currentSaved.filter(
+        (prof) => String(prof) !== String(professorId)
+      );
+      const { error: profileIRError } = await supabase
+        .from("User_Profiles")
+        .update({
+          saved_professors: newSaved,
+          applied_professors: newApplied,
+        })
+        .eq("user_id", userId);
+
+      if (profileIRError) {
+        return res.status(400).json({ message: "Insertion and Removal Error" });
+      }
+    } else {
+      const { error: profileInsertionError } = await supabase
+        .from("User_Profiles")
+        .update({
+          applied_professors: newApplied,
+        })
+        .eq("user_id", userId);
+
+      if (profileInsertionError) {
+        return res
+          .status(400)
+          .json({ message: "Insertion Error for Second Function" });
+      }
+    }
+    return res.status(200).json({
+      message: "Professor successfully added to 'In Progress' column.",
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
 app.delete(
   "/kanban/delete-in-progress/:userId/:professorId",
   async (req, res) => {
-    const userId = req.params.userId;
-    const professorId = parseInt(req.params.professorId);
-
+    const { userId, professorId } = req.params;
     try {
-      const { data: currentApp, error: fetchError } = await supabase
-        .from("Applications")
-        .select("in_progress")
+      const { error: deletionError } = await supabase
+        .from("InProgress")
+        .delete()
+        .eq("user_id", userId)
+        .eq("professor_id", professorId);
+
+      if (deletionError) {
+        return res.status(400).json({ message: "Failed to delete" });
+      }
+
+      const { data: profileData, error: profileFetchError } = await supabase
+        .from("User_Profiles")
+        .select("applied_professors")
         .eq("user_id", userId)
         .single();
 
-      if (fetchError) {
-        return res.status(400).json({ message: fetchError.message });
-      }
-
-      const currentInProgress = currentApp.in_progress || [];
-
-      const updatedInProgress = currentInProgress.filter(
-        (prof) => prof.id !== professorId
-      );
-
-      if (updatedInProgress.length === currentInProgress.length) {
+      if (profileFetchError) {
         return res
-          .status(404)
-          .json({ message: "Professor not found in In Progress" });
+          .status(400)
+          .json({ message: "Could not fetch profile data." });
       }
 
-      const { data, error: updateError } = await supabase
-        .from("Applications")
-        .update({ in_progress: updatedInProgress })
-        .eq("user_id", userId);
-
-      if (updateError) {
-        return res.status(500).json({ message: "Internal Error" });
-      }
-
-      return res.status(200).json({ data: data });
-    } catch (error) {
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.delete(
-  "/kanban/delete-in-complete/:userId/:professorId",
-  async (req, res) => {
-    const userId = req.params.userId;
-    const professorId = parseInt(req.params.professorId);
-
-    try {
-      const { data: currentApp, error: fetchError } = await supabase
-        .from("Applications")
-        .select("in_complete")
-        .eq("user_id", userId)
-        .single();
-
-      if (fetchError) {
-        return res.status(400).json({ message: fetchError.message });
-      }
-
-      const currentInComplete = currentApp.in_complete || [];
-
-      const updatedInComplete = currentInComplete.filter(
-        (prof) => prof.id !== professorId
+      const currentApplied = profileData.applied_professors;
+      const newApplied = currentApplied.filter(
+        (prof) => String(prof) !== professorId
       );
 
-      if (updatedInComplete.length === currentInComplete.length) {
-        return res
-          .status(404)
-          .json({ message: "Professor not found in In Progress" });
-      }
-
-      const { data, error: updateError } = await supabase
-        .from("Applications")
-        .update({ in_complete: updatedInComplete })
-        .eq("user_id", userId);
-
-      if (updateError) {
-        return res.status(500).json({ message: "Internal Error" });
-      }
-
-      return res.status(200).json({ data: data });
-    } catch (error) {
-      return res.status(500).json({ message: error.message });
-    }
-  }
-);
-
-app.put(
-  "/kanban/update-in-progress-to-completed/:userId/:professorId",
-  async (req, res) => {
-    const userId = req.params.userId;
-    const professorId = parseInt(req.params.professorId);
-    try {
-      const { data: currentApp, error: authError } = await supabase
-        .from("Applications")
-        .select("in_progress, completed")
-        .eq("user_id", userId)
-        .single();
-
-      if (authError) {
-        return res.status(400).json({ message: "Authentication Error" });
-      }
-      if (!currentApp) {
-        return res.status(404).json({ message: "Application not found" });
-      }
-
-      const currentInProgress = currentApp.in_progress || [];
-      const currentCompleted = currentApp.completed || [];
-
-      const professorToMove = currentInProgress.find(
-        (prof) => prof.id === professorId
-      );
-      if (!professorToMove) {
-        return res
-          .status(404)
-          .json({ message: "Professor not found in In Progress" });
-      }
-
-      const updatedInProgress = currentInProgress.filter(
-        (prof) => prof.id !== professorId
-      );
-      const updatedCompleted = [...currentCompleted, professorToMove];
-      const { data, error: updateError } = await supabase
-        .from("Applications")
+      const { error: profileIRError } = await supabase
+        .from("User_Profiles")
         .update({
-          in_progress: updatedInProgress,
-          completed: updatedCompleted,
+          applied_professors: newApplied,
         })
         .eq("user_id", userId);
 
-      if (updateError) {
-        res.status(500).json({
-          message: "Internal Server Error",
-        });
-      }
-      return res.status(200).json({
-        message: "Professor moved to completed",
-      });
+      return res.status(200).json({ message: "Delete Successful" });
     } catch (error) {
-      return res
-        .status(500)
-        .json({ message: "Internal server error", error: error.message });
+      return res.status(500).json({ message: "Internal Server Error" });
     }
   }
 );
 
-// Add In Complete / Saved Section Implementations All Here
-app.post("/kanban/add-in-complete/:userId", async (req, res) => {
-  const userId = req.params.userId;
-  const { professor_data } = req.body;
+// Saved Section Implementations All Here
+// Save sends notifications that is the difference between that and inprogress
+app.get("/kanban/get-saved/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: savedData, error: savedFetchError } = await supabase
+      .from("Saved")
+      .select("*")
+      .eq("user_id", userId)
+      .limit(10);
 
-  console.log(
-    `[DEBUG] Incoming request to add in-complete for userId: ${userId}`
-  );
-  console.log(`[DEBUG] Received professor_data:`, professor_data);
+    if (savedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
+    }
 
-  if (!professor_data || !professor_data.id) {
-    console.log(`[ERROR] Missing professor data or ID`);
-    return res
-      .status(400)
-      .json({ message: "Professor data with ID is required." });
+    return res.status(200).json({ data: savedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
   }
+});
 
-  const professorId = professor_data.id;
+app.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  const {
+    name,
+    email,
+    url,
+    lab_url,
+    research_interests,
+    labs,
+    department,
+    faculty,
+    school,
+    comments,
+  } = req.body;
 
   try {
-    const { data: appData, error: appFetchError } = await supabase
-      .from("Applications")
-      .select("in_complete")
-      .eq("user_id", userId)
+    const { error: savedInsertionError } = await supabase
+      .from("Saved")
+      .insert({
+        user_id: userId,
+        professor_id: professorId,
+        name: name,
+        email: email,
+        url: url,
+        lab_url: lab_url,
+        labs: labs,
+        department: department,
+        faculty: faculty,
+        school: school,
+        research_interests: research_interests,
+        comments: comments,
+      })
       .single();
-
-    if (appFetchError) {
-      console.log(`[ERROR] Failed to fetch Applications:`, appFetchError);
+    if (savedInsertionError) {
       return res
         .status(400)
         .json({ message: "Could not fetch application data." });
-    }
-
-    const currentInComplete = appData?.in_complete || [];
-    console.log(`[DEBUG] Current in_complete list:`, currentInComplete);
-
-    const alreadyInIncomplete = currentInComplete.some(
-      (prof) => prof.id === professorId
-    );
-    let updatedInComplete = currentInComplete;
-
-    if (!alreadyInIncomplete) {
-      const professorWithTimestamp = {
-        ...professor_data,
-        added_at: new Date().toISOString(),
-      };
-      updatedInComplete = [...currentInComplete, professorWithTimestamp];
-      console.log(`[DEBUG] Updated in_complete to save:`, updatedInComplete);
-
-      const { error: appUpdateError } = await supabase
-        .from("Applications")
-        .update({ in_complete: updatedInComplete })
-        .eq("user_id", userId);
-
-      if (appUpdateError) {
-        console.log(`[ERROR] Failed to update Applications:`, appUpdateError);
-        return res
-          .status(400)
-          .json({ message: "Could not update application data." });
-      }
-    } else {
-      console.log(
-        `[INFO] Professor already in in_complete list, skipping update`
-      );
     }
 
     const { data: profileData, error: profileFetchError } = await supabase
@@ -1153,247 +1649,91 @@ app.post("/kanban/add-in-complete/:userId", async (req, res) => {
       .single();
 
     if (profileFetchError) {
-      console.log(`[ERROR] Failed to fetch User_Profiles:`, profileFetchError);
       return res.status(400).json({ message: "Could not fetch profile data." });
     }
 
     const currentSaved = profileData?.saved_professors || [];
-    console.log(`[DEBUG] Current saved_professors list:`, currentSaved);
-
     const alreadySaved = currentSaved.includes(professorId);
 
     if (!alreadySaved) {
       const updatedSaved = [...currentSaved, professorId];
-      console.log(`[DEBUG] Updating saved_professors to:`, updatedSaved);
-
       const { error: savedUpdateError } = await supabase
         .from("User_Profiles")
         .update({ saved_professors: updatedSaved })
         .eq("user_id", userId);
 
       if (savedUpdateError) {
-        console.log(
-          `[ERROR] Failed to update User_Profiles:`,
-          savedUpdateError
-        );
         return res
           .status(400)
           .json({ message: "Could not update saved professors." });
       }
-    } else {
-      console.log(`[INFO] Professor already saved in User_Profiles`);
     }
 
-    console.log(`[SUCCESS] Professor saved successfully for user ${userId}`);
     return res.status(200).json({ message: "Professor saved successfully." });
   } catch (err) {
-    console.log(`[UNEXPECTED ERROR]:`, err);
     return res.status(500).json({ message: "An unexpected error occurred." });
   }
 });
 
-app.delete("/kanban/remove-in-complete/:userId", async (req, res) => {
-  const userId = req.params.userId;
-  const { professor_id } = req.body;
+app.delete("/kanban/remove-saved/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
 
-  if (!professor_id) {
-    return res.status(400).json({ message: "Professor ID is required." });
+  if (!professorId || !userId) {
+    return res
+      .status(400)
+      .json({ message: "Professor ID and User ID is required." });
   }
-
   try {
-    const { data: appData, error: appFetchError } = await supabase
-      .from("Applications")
-      .select("in_complete")
+    const { error: savedDeletionError } = await supabase
+      .from("Saved")
+      .delete()
+      .eq("user_id", userId)
+      .eq("professor_id", professorId);
+
+    if (savedDeletionError) {
+      return res
+        .status(400)
+        .json({ message: "Could not delete application data." });
+    }
+
+    const { data: savedData, error: savedDataFetchError } = await supabase
+      .from("User_Profiles")
+      .select("saved_professors")
       .eq("user_id", userId)
       .single();
 
-    if (appFetchError) {
-      return res
-        .status(400)
-        .json({ message: "Could not fetch application data." });
+    if (savedDataFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch Data" });
     }
-
-    const currentInComplete = appData?.in_complete || [];
-    const updatedInComplete = currentInComplete.filter(
-      (prof) => prof.id !== professor_id
+    const prevSaved = savedData.saved_professors;
+    const newSaved = prevSaved.filter(
+      (prof) => String(prof) !== String(professorId)
     );
 
-    if (updatedInComplete.length !== currentInComplete.length) {
-      const { error: appUpdateError } = await supabase
-        .from("Applications")
-        .update({ in_complete: updatedInComplete })
+    if (prevSaved.length !== newSaved.length) {
+      const { error: arrayUpdateError } = await supabase
+        .from("User_Profiles")
+        .update({ saved_professors: newSaved })
         .eq("user_id", userId);
-
-      if (appUpdateError) {
+      if (arrayUpdateError) {
         return res
           .status(400)
           .json({ message: "Could not update application data." });
       }
     }
 
-    // --- Step 2: Remove from User_Profiles.saved_professors ---
-    const { data: profileData, error: profileFetchError } = await supabase
-      .from("User_Profiles")
-      .select("saved_professors")
-      .eq("user_id", userId)
-      .single();
-
-    if (profileFetchError) {
-      return res.status(400).json({ message: "Could not fetch profile data." });
-    }
-
-    const currentSaved = profileData?.saved_professors || [];
-    const updatedSaved = currentSaved.filter((id) => id !== professor_id);
-
-    if (updatedSaved.length !== currentSaved.length) {
-      const { error: profileUpdateError } = await supabase
-        .from("User_Profiles")
-        .update({ saved_professors: updatedSaved })
-        .eq("user_id", userId);
-
-      if (profileUpdateError) {
-        return res
-          .status(400)
-          .json({ message: "Could not update saved professors." });
-      }
-    }
-
     return res.status(200).json({ message: "Professor removed successfully." });
   } catch (err) {
+    console.log(err);
+
     return res.status(500).json({ message: "An unexpected error occurred." });
   }
 });
 
-/*
-app.put(
-  "/kanban/update-incomplete-to-inprogress/:userId/:professorId",
-  async (req, res) => {
-    const userId = req.params.userId;
-    const professorId = parseInt(req.params.professorId);
-    try {
-      const { data: currentApp, error: authError } = await supabase
-        .from("Applications")
-        .select("in_complete, in_progress")
-        .eq("user_id", userId)
-        .single();
-
-      if (authError) {
-        return res.status(400).json({ message: "Authentication Error" });
-      }
-      if (!currentApp) {
-        return res.status(404).json({ message: "Application not found" });
-      }
-
-      const currentInProgress = currentApp.in_progress || [];
-      const currentInComplete = currentApp.in_complete || [];
-
-      const professorToMove = currentInComplete.find(
-        (prof) => prof.id === professorId
-      );
-      if (!professorToMove) {
-        return res
-          .status(404)
-          .json({ message: "Professor not found in In Complete" });
-      }
-
-      const updatedInComplete = currentInComplete.filter(
-        (prof) => prof.id !== professorId
-      );
-      const updatedInProgress = [...currentInProgress, professorToMove];
-      const { data, error: updateError } = await supabase
-        .from("Applications")
-        .update({
-          in_complete: updatedInComplete,
-          in_progress: updatedInProgress,
-        })
-        .eq("user_id", userId);
-
-      if (updateError) {
-        res.status(500).json({
-          message: "Internal Server Error",
-        });
-      }
-      return res.status(200).json({
-        message: "Professor moved to In Progress",
-      });
-    } catch (error) {
-      return res
-        .status(500)
-        .json({ message: "Internal server error", error: error.message });
-    }
-  }
-);
-*/
-
-//Run as a cron job, for moving things to follow up and sending email to remind them to follow up after
-app.post("/kanban/maintenance/:id", async (req, res) => {
-  const userId = req.params.id;
-  const { force } = req.query;
-
-  try {
-    const { data: application, error: fetchError } = await supabase
-      .from("Applications")
-      .select("completed")
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError) {
-      return res.status(400).json({ message: fetchError.message });
-    }
-
-    const currentInProgress = application.in_progress || [];
-    const currentFollowUp = application.follow_up || [];
-    const lastMaintenance =
-      application.last_maintenance || new Date(0).toISOString();
-    const shouldRun =
-      force || new Date() - new Date(lastMaintenance) > 24 * 60 * 60 * 1000;
-
-    if (!shouldRun) {
-      return res.status(200).json({
-        message: "Maintenance not needed",
-        data: application,
-      });
-    }
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-    const [updatedInProgress, movedToFollowUp] = currentInProgress.reduce(
-      ([inProgress, followUp], prof) => {
-        const addedDate = new Date(prof.added_at);
-        if (addedDate < oneWeekAgo) {
-          followUp.push(prof);
-        } else {
-          inProgress.push(prof);
-        }
-        return [inProgress, followUp];
-      },
-      [[], [...currentFollowUp]]
-    );
-
-    const { data, error: updateError } = await supabase
-      .from("Applications")
-      .update({
-        in_progress: updatedInProgress,
-        follow_up: movedToFollowUp,
-        last_maintenance: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-
-    if (updateError) {
-      return res.status(400).json({ message: updateError.message });
-    }
-
-    return res.status(200).json({
-      message: "Maintenance completed",
-      data: {
-        in_progress: updatedInProgress,
-        follow_up: movedToFollowUp,
-        moved_count: movedToFollowUp.length - currentFollowUp.length,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
+//Saved Endpoints end here
+app.post("/github/create-page/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { resume } = req.body;
 });
 
 app.listen(port, () => {
