@@ -598,6 +598,7 @@ app.post(
         thread_id: sendResponse.data.threadId,
         message_id: sendResponse.data.id,
         tracking_id: draftIdData.tracking_id,
+        type: "First"
       });
 
       const { error: insertionError } = await supabase
@@ -618,7 +619,7 @@ app.post("/gmail/create-follow-up-draft/", async (req, res) => {
 }) 
 
 app.post("/gmail/save-follow-up/", async => {
-  
+
 })
 
 app.post(
