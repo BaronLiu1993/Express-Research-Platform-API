@@ -494,7 +494,7 @@ app.put("/gmail/update-draft/:userId/:professorId", async (req, res) => {
   }
 });
 
-app.get("/tracking/open/:trackingId", (req, res) => {});
+
 
 app.post(
   "/gmail/gcalendar/send-draft/:userId/:professorId",
@@ -570,12 +570,20 @@ app.post(
           .eq("professor_id", professorId)
           .single();
 
+      console.log(inProgressFetchError);
       if (!inProgressFetchError) {
-        await supabase.from("Completed").insert({ ...inProgressData });
-        await supabase
+        const { error: insertionError } = await supabase
+          .from("Completed")
+          .insert(inProgressData);
+        console.log(inProgressData);
+        console.log(insertionError);
+
+        const { error: deletionError } = await supabase
           .from("InProgress")
           .delete()
-          .match({ user_id: userId, professor_id: professorId });
+          .eq("user_id", userId)
+          .eq("professor_id", professorId);
+        console.log(deletionError);
       }
 
       await supabase
@@ -605,17 +613,21 @@ app.post(
   }
 );
 
+app.post("/gmail/create-follow-up-draft/", async (req, res) => {
+
+}) 
+
+app.post("/gmail/save-follow-up/", async => {
+  
+})
+
 app.post(
   "/gmail/gcalendar/follow-up-reply/:userId/:professorId",
   async (req, res) => {
     const { userId, professorId } = req.params;
     const { body, subject } = req.body;
 
-    const { error: insertionError } = await supabase
-      .from("Key_Performance_Indicators")
-      .update({})
-      .eq("user_id", userId)
-      .increment({ follow_up_emails: 1 });
+    const { data: thread, error }
   }
 );
 
