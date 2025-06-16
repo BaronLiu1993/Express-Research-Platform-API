@@ -18,7 +18,6 @@ export async function sendEmail(
   const oAuth2Client = new OAuth2(
     clientId,
     clientSecret,
-    "https://developers.google.com/oauthplayground" 
   );
 
   // 2) Give it the refresh token

@@ -1,24 +1,49 @@
 import { Worker } from "bullmq";
-import { sendEmail } from "./compose/compose";
+import { sendSnippetEmail } from "./sendSnippet.js";
+import { Connection } from "../redis/redis.js";
 
-const emailWorker = new Worker(
-  "emailQueue",
-  async (job) => {
-    const { clientId, clientSecret, fromEmail, fromName, to, subject, text } = job.data;
-    await sendEmail({ clientId, clientSecret, fromEmail, fromName, to, subject, text });
-  },
-  {
-    connection: {
-      host: "127.0.0.1",
-      port: 6379,
+export const emailWorker = new Worker(
+    'email-queue',
+    async (job) => {
+      const { userId, professorId, body } = job.data;
+      
+      try {
+        console.log(`Processing email job ${job.id} for professor ${professorId}`);
+        
+        // Call your existing sendSnippetEmail function with correct parameters
+        const result = await sendSnippetEmail({ userId, professorId, body });
+        
+        console.log(`Email sent successfully to professor ${professorId}`);
+        return result;
+        
+      } catch (error) {
+        console.error(`Failed to send email for job ${job.id}:`, error);
+        throw error; 
+      }
     },
-  }
-);
-
-emailWorker.on("completed", job => {
-    console.log(`Sent to ${job.data.to}`)
-})
-
-emailWorker.on("failed", (job, err) => {
-    console.log(`Sent to ${job.data.to}`, err.message)
-})
+    {
+      connection: Connection,
+      concurrency: 5,
+      limiter: {
+        max: 10,      
+        duration: 60000, 
+      },
+    }
+  );
+  
+  // Worker event handlers for monitoring
+  emailWorker.on('completed', (job, result) => {
+    console.log(`✅ Job ${job.id} completed for professor ${job.data.professorId}`);
+  });
+  
+  emailWorker.on('failed', (job, err) => {
+    console.error(`❌ Job ${job.id} failed for professor ${job.data.professorId}:`, err.message);
+  });
+  
+  emailWorker.on('stalled', (jobId) => {
+    console.warn(`⚠️ Job ${jobId} stalled`);
+  });
+  
+  emailWorker.on('error', (err) => {
+    console.error('Worker error:', err);
+  });

@@ -10,7 +10,8 @@ import { simpleParser } from "mailparser";
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { DateTime } from "luxon";
-import Mustache from "mustache";
+import emailQueue from "./queue/queue.js";
+import './queue/worker.js'
 
 //Test only
 
@@ -30,7 +31,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(bodyParser.json());
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 // Temporary here for dev import in after from supabase.js module
 const OPEN_AI = new OpenAI({
@@ -108,112 +108,34 @@ function extractHtmlOrPlainText(payload) {
   return null;
 }
 
-app.post("/gmail/snippet-send/:userId/:professorId", async (req, res) => {
-  const { userId, professorId } = req.params;
-  const { snippetId, dynamicFields, to, fromName, fromEmail } = req.body;
-  const trackingId = uuidv4() // create new trackingId for each
-  const { data: tokenData, error: tokenFetchError } = await supabase
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
+app.post("/gmail/snippet-send-bulk", async (req, res) => {
+  const { userId, professorData, baseBody } = req.body;
 
-  if (tokenFetchError || !tokenData) {
-    return res.status(400).json({});
-  }
-
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
-  });
-
-  //Fetch the snippet
-  const { data: snippetData, error: snippetFetchError } = await supabase
-    .from("snippets")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("id", snippetId)
-    .single();
-  console.log(snippetFetchError);
-  //add the saved to completed if possible
-  if (!snippetData || snippetFetchError) {
-    return res.status(400).json({ message: "Failed to Fetch Data" });
-  }
-
-  const snippetHTML = snippetData.snippet_html;
-  const snippetSubject = snippetData.snippet_subject;
-
-
-  // Generate the Email from the Snippet
-  const emailSubject = Mustache.render(snippetSubject, dynamicFields);
-  let emailHTML = Mustache.render(snippetHTML, dynamicFields);
-  const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${trackingId}" width="1" height="1" style="display:none;" />`
-  emailHTML += trackingPixel
-  const raw = makeBody(to, fromName, fromEmail, emailSubject, emailHTML);
-  //Fetch the single
-
-  //Move the data
-  const { data: inProgressData, error: inProgressFetchError } = await supabase
-    .from("InProgress")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("professor_id", professorId)
-    .single();
-
-  if (!inProgressFetchError) {
-    const { error: insertionError } = await supabase
-      .from("Completed")
-      .insert(inProgressData);
-
-    const { error: deletionError } = await supabase
-      .from("InProgress")
-      .delete()
-      .eq("user_id", userId)
-      .eq("professor_id", professorId);
-
-    if (insertionError || deletionError) {
-      return res
-        .status(400)
-        .json({ message: "Kanban Deletion or Insertion Error" });
-    }
-  }
 
   try {
-    await oauth2Client.getAccessToken();
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const sendResponse = await gmail.users.messages.send({
-      userId: "me",
-      requestBody: {
-        raw
+    const jobs = professorData.map((professor) => ({
+      name: "send-snippet-email",
+      data: {
+        userId,
+        professorId: professor.id,
+        body: {
+          ...baseBody,
+          dynamicFields: professor.dynamicFields,
+          to: professor.email,
+        },
       },
-    });
-
-    //Insert into Emails and Messages With Tracking IDs
-    await supabase
-      .from("Emails")
-      .insert([{
-        user_id: userId,
-        professor_id: parseInt(professorId),
-        thread_id: sendResponse.data.threadId,
-        sent_at: new Date().toISOString(),
-        type: "First",
-        sent: true,
-        tracking_id: trackingId
-      }])
-      
-
-    await supabase.from("Messages").insert({
-      thread_id: sendResponse.data.threadId,
-      message_id: sendResponse.data.id,
-      tracking_id: trackingId,
-      type: "First",
-    });
-    return res.status(200).json({ message: "Sucessfully Sent!" });
-
-  } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
+    }));
+    const addedJobs = await emailQueue.addBulk(jobs)
+    console.log(jobs)
+    console.log(jobs[0].data)
+    console.log(jobs[0].data.body.dynamicFields)
+    res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
+  } catch (err) {
+    console.log(err)
+    res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
+
 
 app.get("/auth/github/:userId", (req, res) => {
   const { userId } = req.params;
