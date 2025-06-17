@@ -11,7 +11,7 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 import { DateTime } from "luxon";
 import emailQueue from "./queue/queue.js";
-import './queue/worker.js'
+import "./queue/worker.js";
 
 //Test only
 
@@ -108,9 +108,86 @@ function extractHtmlOrPlainText(payload) {
   return null;
 }
 
+function removeCurlyBraces(input) {
+  return input.replace(/[{}]/g, "");
+}
+
+app.post("/sync-fetchable-variables/:userId", async (req, res) => {
+  const { variableArray, professorIdArray } = req.body;
+  const { userId } = req.params;
+
+  if (!variableArray || !Array.isArray(variableArray)) {
+    return res.status(400).json({ message: "Input is not an Array" });
+  }
+
+  const newVariableArray = variableArray.map(removeCurlyBraces);
+
+  let result = [];
+
+  try {
+    for (let i = 0; i < professorIdArray.length; i++) {
+      const professorId = professorIdArray[i];
+
+      const { data: constantData, error: constantError } = await supabase
+        .from("Taishan")
+        .select("id, email")
+        .eq("id", professorId)
+        .single();
+
+      if (constantError) throw constantError;
+
+      const filteredFields = newVariableArray.filter((v) => v !== "publications");
+      const { data: variableData, error: variableError } = await supabase
+        .from("Taishan")
+        .select(filteredFields.join())
+        .eq("id", professorId)
+        .single();
+
+      if (variableError) throw variableError;
+
+      let publicationData = [];
+      if (newVariableArray.includes("publications")) {
+        const { data, error } = await supabase.rpc("match_publications", {
+          student_id_param: userId,
+          professor_id_param: professorId,
+          match_threshold_param: 0.2,
+          match_count_param: 1,
+        });
+
+        if (error) throw error;
+        publicationData = data?.[0]?.title || "";
+        console.log(publicationData)
+      }
+
+      const dynamicFields = {
+        ...(variableData || {}),
+        publications:
+          newVariableArray.includes("publications")
+            ? publicationData
+            : "",
+      };
+
+      result.push({
+        id: constantData.id,
+        email: constantData.email,
+        dynamicFields,
+      });
+    }
+
+    return res.status(200).json({ result, status: "synced" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      status: "failed",
+    });
+  }
+});
+
+
+
 app.post("/gmail/snippet-send-bulk", async (req, res) => {
   const { userId, professorData, baseBody } = req.body;
-
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -125,17 +202,49 @@ app.post("/gmail/snippet-send-bulk", async (req, res) => {
         },
       },
     }));
-    const addedJobs = await emailQueue.addBulk(jobs)
-    console.log(jobs)
-    console.log(jobs[0].data)
-    console.log(jobs[0].data.body.dynamicFields)
+    const addedJobs = await emailQueue.addBulk(jobs);
+    console.log(jobs);
+    console.log(jobs[0].data);
+    console.log(jobs[0].data.body.dynamicFields);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
-    console.log(err)
+    console.log(err);
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
 
+app.post("/snippets/insert/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { snippet_html, snippet_subject } = req.body;
+  try {
+    const { data: insertionData, error: insertionError } = await supabase
+      .from("snippets")
+      .insert({
+        user_id: userId,
+        snippet_html: snippet_html,
+        snippet_subject: snippet_subject,
+        snippet_name: "Test",
+      })
+      .select("id")
+      .single();
+    return res.status(200).json({ message: insertionData.id });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.get("/snippets/get-all/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: getData, error: getError } = await supabase
+      .from("snippets")
+      .select("id, snippet_html, snippet_subject")
+      .eq("user_id", userId);
+    return res.status(200).json({ message: getData });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
 app.get("/auth/github/:userId", (req, res) => {
   const { userId } = req.params;
@@ -1748,6 +1857,7 @@ app.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
 });
 
 app.get("/taishan", async (req, res) => {
+  //use query parameters here
   const { data, error } = await supabase.from("Taishan").select("*").limit(10);
   //try catch this
   if (error) {
