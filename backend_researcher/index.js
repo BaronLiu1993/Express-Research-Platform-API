@@ -112,17 +112,40 @@ function removeCurlyBraces(input) {
   return input.replace(/[{}]/g, "");
 }
 
+app.get("/get-publications/:professorId", async (req, res) => {
+  const { professorId } = req.params;
+  try {
+    const { data: publicationsData, error: publicationsFetchError } =
+      await supabase
+        .from("Publications")
+        .select("id, title, link, publication_type, publication_date")
+        .eq("professor_id", professorId);
+    if (publicationsFetchError) {
+      return res
+        .status(400)
+        .json({ message: "Failed to Fetch Professor Data" });
+    }
+
+    return res.status(200).json({ publicationsData });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 app.post("/sync-fetchable-variables/:userId", async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
   const { userId } = req.params;
 
-  if (!variableArray || !Array.isArray(variableArray)) {
-    return res.status(400).json({ message: "Input is not an Array" });
+  if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
+    return res.status(400).json({ message: "Invalid input arrays" });
+  }
+
+  if (variableArray.length === 0 || professorIdArray.length === 0) {
+    return res.status(400).json({ message: "User Sent Nothing" });
   }
 
   const newVariableArray = variableArray.map(removeCurlyBraces);
-
-  let result = [];
+  const result = [];
 
   try {
     for (let i = 0; i < professorIdArray.length; i++) {
@@ -133,19 +156,22 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
         .select("id, email")
         .eq("id", professorId)
         .single();
-
       if (constantError) throw constantError;
 
       const filteredFields = newVariableArray.filter((v) => v !== "publications");
-      const { data: variableData, error: variableError } = await supabase
-        .from("Taishan")
-        .select(filteredFields.join())
-        .eq("id", professorId)
-        .single();
 
-      if (variableError) throw variableError;
+      let variableData = {};
+      if (filteredFields.length > 0) {
+        const { data, error: variableError } = await supabase
+          .from("Taishan")
+          .select(filteredFields.join())
+          .eq("id", professorId)
+          .single();
+        if (variableError) throw variableError;
+        variableData = data || {};
+      }
 
-      let publicationData = [];
+      let publicationData;
       if (newVariableArray.includes("publications")) {
         const { data, error } = await supabase.rpc("match_publications", {
           student_id_param: userId,
@@ -156,22 +182,25 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
 
         if (error) throw error;
         publicationData = data?.[0]?.title || "";
-        console.log(publicationData)
       }
 
-      const dynamicFields = {
-        ...(variableData || {}),
-        publications:
-          newVariableArray.includes("publications")
-            ? publicationData
-            : "",
-      };
+      const dynamicFields = {};
+      if (Object.keys(variableData).length > 0) {
+        Object.assign(dynamicFields, variableData);
+      }
+      if (publicationData !== undefined) {
+        dynamicFields.publications = publicationData;
+      }
 
-      result.push({
+      const resultEntry = {
         id: constantData.id,
         email: constantData.email,
-        dynamicFields,
-      });
+      };
+      if (Object.keys(dynamicFields).length > 0) {
+        resultEntry.dynamicFields = dynamicFields;
+      }
+
+      result.push(resultEntry);
     }
 
     return res.status(200).json({ result, status: "synced" });
@@ -183,7 +212,6 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
     });
   }
 });
-
 
 
 app.post("/gmail/snippet-send-bulk", async (req, res) => {
@@ -1858,7 +1886,7 @@ app.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
 
 app.get("/taishan", async (req, res) => {
   //use query parameters here
-  const { data, error } = await supabase.from("Taishan").select("*").limit(10);
+  const { data, error } = await supabase.from("Taishan").select("*").limit(20);
   //try catch this
   if (error) {
     return res.status(400).json({ error: error.message });
