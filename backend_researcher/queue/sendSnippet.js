@@ -76,17 +76,17 @@ export async function sendSnippetEmail({ userId, professorId, body }) {
   
     const raw = makeBody(to, fromName, fromEmail, emailSubject, emailHTML);
   
-    const { data: inProgressData } = await supabase
-      .from("InProgress")
+    const { data: savedData } = await supabase
+      .from("Saved")
       .select("*")
       .eq("user_id", userId)
       .eq("professor_id", professorId)
       .single();
   
-    if (inProgressData) {
-      await supabase.from("Completed").insert(inProgressData);
+    if (savedData) {
+      await supabase.from("Completed").insert(savedData);
       await supabase
-        .from("InProgress")
+        .from("Saved")
         .delete()
         .eq("user_id", userId)
         .eq("professor_id", professorId);

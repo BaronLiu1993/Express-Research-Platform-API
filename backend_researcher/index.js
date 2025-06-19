@@ -158,7 +158,9 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
         .single();
       if (constantError) throw constantError;
 
-      const filteredFields = newVariableArray.filter((v) => v !== "publications");
+      const filteredFields = newVariableArray.filter(
+        (v) => v !== "publications"
+      );
 
       let variableData = {};
       if (filteredFields.length > 0) {
@@ -212,7 +214,6 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
     });
   }
 });
-
 
 app.post("/gmail/snippet-send-bulk", async (req, res) => {
   const { userId, professorData, baseBody } = req.body;
@@ -1351,6 +1352,31 @@ app.get("/gmail/get-engagement/:threadId/:messageId", async (req, res) => {
   }
 });
 
+app.get("/gmail/get-seen/:threadId/:messageId", async (req, res) => {
+  const { threadId, messageId } = req.params;
+  try {
+    const { data: messageData, error: messageDataError } = await supabase
+      .from("Messages")
+      .select("opened_email, opened_email_at")
+      .eq("thread_id", threadId)
+      .eq("message_id", messageId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ opened: false, opened_at: "Not Opened" });
+    }
+
+    return res
+      .status(200)
+      .json({
+        opened_email: messageData.opened_email,
+        opened_email_at: messageData.opened_email_at,
+      });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 app.get("/gmail/get-status/:threadId/", async (req, res) => {
   const { threadId } = req.params;
   try {
@@ -1886,40 +1912,26 @@ app.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
 
 app.get("/taishan", async (req, res) => {
   //use query parameters here
-  const { data, error } = await supabase.from("Taishan").select("*").limit(20);
+  const { page } = req.query;
+  const pageNumber = parseInt(page)
+  const limit = 20;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
   //try catch this
-  if (error) {
-    return res.status(400).json({ error: error.message });
-  }
-
-  return res.status(200).json({ data });
-});
-
-app.get("/kanban/get/:id", async (req, res) => {
-  const userId = req.params.id;
-
   try {
-    const { data: board, error } = await supabase
-      .from("Applications")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    if (error) {
-      return res
-        .status(400)
-        .json({ message: "Unable to fetch application board." });
+    const { data: tableData, count: tableCount, error: tableFetchError } = await supabase
+      .from("Taishan")
+      .select("*", { count: "exact"})
+      .range(from, to)
+    console.log(tableFetchError)
+    if (tableFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch Table Data" });
     }
-
-    if (!board) {
-      console.log("⚠️ No board found for user:", userId);
-      return res.status(404).json({ message: "Application board not found." });
-    }
-
-    return res.status(200).json({ data: board });
-  } catch (error) {
-    console.log("🔥 Unexpected error:", error.message);
-    return res.status(500).json({ message: "Server error." });
+    console.log(tableCount)
+    return res.status(200).json({ tableData, tableCount });
+  } catch (err) {
+    console.log(err)
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
