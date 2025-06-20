@@ -1667,22 +1667,27 @@ app.post("/auth/register", async (req, res) => {
   }
 });
 
-app.post("/match-professors", async (req, res) => {
-  const { student_id, match_threshold = 0.2, match_count = 5 } = req.body;
-  try {
-    const { data, error } = await supabase.rpc("match_professors_for_student", {
-      student_id,
-      match_threshold,
-      match_count,
-    });
+app.get("/match-professors", async (req, res) => {
+  const { userId } = req.query;
+  const match_count = 10;
+  const match_threshold = 0.2;
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
+  try {
+    const { data: matches, error: matchesFetchError } = await supabase.rpc(
+      "match_professors_for_student",
+      {
+        student_id: userId,
+        match_threshold,
+        match_count,
+      }
+    );
+    if (matchesFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
     }
 
-    return res.status(200).json({ matches: data });
+    return res.status(200).json({ matches });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -1909,106 +1914,102 @@ app.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
 });
 
 //Semantic Search
-app.get("/taishan/semantic-search", async (req, res) => {
-  const { search, page } = req.query;
-  const pageNumber = parseInt(page) || 1;
-  const pageOffset = (pageNumber - 1) * 20;
+app.get("/taishan/filter", async (req, res) => {
+  const { type, value } = req.query;
 
   try {
-    if (!search || search.length > 40) {
-      return res.status(400).json({ message: "Invalid or too long input" });
+    const { data: tableData, error: tableDataFetchError } = await supabase
+      .from("Taishan")
+      .select(
+        "id, name, url, school, department, faculty, bio, email, labs, lab_url, research_interests",
+        { count: "exact" }
+      )
+      .eq(type, value);
+
+    if (tableDataFetchError) {
+      return res.status(400).json({ message: "Failed To Fetch Filtered Data" });
     }
 
-    // Generate Embedding
-    const embeddingResult = await OPEN_AI.embeddings.create({
-      model: "text-embedding-3-large",
-      input: search,
-    });
-
-    const embedding = embeddingResult.data[0].embedding;
-
-    const { data: semanticSearchResults, error: semanticSearchError } =
-      await supabase.rpc("find_similar_professors_by_vector", {
-        student_embedding: embedding,
-        match_threshold: 0.2,
-        page_size: 20,
-        page_offset: pageOffset,
-      });
-    console.log(semanticSearchError);
-    if (semanticSearchError) {
-      return res.status(400).json({ message: "Supabase Fetch Error" });
-    }
-
-    return res.status(200).json({ semanticSearchResults });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Internal Server Error" });
+    return res.status(200).json({ tableData });
+  } catch {
+    return res.status(500).json({message: "Internal Server Error"})
   }
 });
 
 app.get("/taishan", async (req, res) => {
   const { page, search } = req.query;
-  const pageNumber = parseInt(page);
+  const pageNumber = parseInt(page) || 1;
   const limit = 20;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;
-  const pageOffset = (pageNumber - 1) * limit
-  //try catch this
+  const pageOffset = (pageNumber - 1) * limit;
 
-  if (search || search == "") {
+  if (typeof search === "string" && search.trim() !== "") {
     try {
-      if (!search || search.length > 40) {
+      //Begin by Sanitizing Input
+      let cleanedSearch = search.trim().replace(/\s+/g, " ");
+
+      if (/[^a-zA-Z0-9.,!?()'\s]/.test(search)) {
+        return res
+          .status(400)
+          .json({ message: "Search contains invalid characters." });
+      }
+
+      if (cleanedSearch.length > 40) {
         return res.status(400).json({ message: "Invalid or too long input" });
       }
-  
-      // Generate Embedding
+
       const embeddingResult = await OPEN_AI.embeddings.create({
         model: "text-embedding-3-large",
-        input: search,
+        input: cleanedSearch,
       });
-  
+
       const embedding = embeddingResult.data[0].embedding;
-  
+
       const { data: tableData, error: semanticSearchError } =
         await supabase.rpc("find_similar_professors_by_vector", {
           student_embedding: embedding,
           match_threshold: 0.2,
-          page_size: 20,
+          page_size: limit,
           page_offset: pageOffset,
         });
-      console.log(semanticSearchError);
+
       if (semanticSearchError) {
         return res.status(400).json({ message: "Supabase Fetch Error" });
       }
-      const tableCount = tableData.length
-      return res.status(200).json({ tableData, tableCount });
+
+      return res.status(200).json({
+        tableData,
+        tableCount: tableData.length,
+      });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
-  } else {
-    try {
-      const {
-        data: tableData,
-        count: tableCount,
-        error: tableFetchError,
-      } = await supabase
-        .from("Taishan")
-        .select(
-          "id, name, url, school, department, faculty, bio, email, labs, lab_url",
-          { count: "exact" }
-        )
-        .range(from, to);
-      console.log(tableFetchError);
-      if (tableFetchError) {
-        return res.status(400).json({ message: "Failed to Fetch Table Data" });
-      }
-      console.log(tableCount);
-      return res.status(200).json({ tableData, tableCount });
-    } catch (err) {
-      console.log(err);
-      return res.status(500).json({ message: "Internal Server Error" });
+  }
+
+  try {
+    const {
+      data: tableData,
+      count: tableCount,
+      error: tableFetchError,
+    } = await supabase
+      .from("Taishan")
+      .select(
+        "id, name, url, school, department, faculty, bio, email, labs, lab_url, research_interests",
+        { count: "exact" }
+      )
+      .range(from, to);
+
+    if (tableFetchError) {
+      console.error(tableFetchError);
+      return res.status(400).json({ message: "Failed to Fetch Table Data" });
     }
+
+    return res.status(200).json({ tableData, tableCount });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
