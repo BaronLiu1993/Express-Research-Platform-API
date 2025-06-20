@@ -1366,12 +1366,10 @@ app.get("/gmail/get-seen/:threadId/:messageId", async (req, res) => {
       return res.status(400).json({ opened: false, opened_at: "Not Opened" });
     }
 
-    return res
-      .status(200)
-      .json({
-        opened_email: messageData.opened_email,
-        opened_email_at: messageData.opened_email_at,
-      });
+    return res.status(200).json({
+      opened_email: messageData.opened_email,
+      opened_email_at: messageData.opened_email_at,
+    });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });
   }
@@ -1910,28 +1908,107 @@ app.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
   }
 });
 
+//Semantic Search
+app.get("/taishan/semantic-search", async (req, res) => {
+  const { search, page } = req.query;
+  const pageNumber = parseInt(page) || 1;
+  const pageOffset = (pageNumber - 1) * 20;
+
+  try {
+    if (!search || search.length > 40) {
+      return res.status(400).json({ message: "Invalid or too long input" });
+    }
+
+    // Generate Embedding
+    const embeddingResult = await OPEN_AI.embeddings.create({
+      model: "text-embedding-3-large",
+      input: search,
+    });
+
+    const embedding = embeddingResult.data[0].embedding;
+
+    const { data: semanticSearchResults, error: semanticSearchError } =
+      await supabase.rpc("find_similar_professors_by_vector", {
+        student_embedding: embedding,
+        match_threshold: 0.2,
+        page_size: 20,
+        page_offset: pageOffset,
+      });
+    console.log(semanticSearchError);
+    if (semanticSearchError) {
+      return res.status(400).json({ message: "Supabase Fetch Error" });
+    }
+
+    return res.status(200).json({ semanticSearchResults });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 app.get("/taishan", async (req, res) => {
-  //use query parameters here
-  const { page } = req.query;
-  const pageNumber = parseInt(page)
+  const { page, search } = req.query;
+  const pageNumber = parseInt(page);
   const limit = 20;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;
+  const pageOffset = (pageNumber - 1) * limit
   //try catch this
-  try {
-    const { data: tableData, count: tableCount, error: tableFetchError } = await supabase
-      .from("Taishan")
-      .select("*", { count: "exact"})
-      .range(from, to)
-    console.log(tableFetchError)
-    if (tableFetchError) {
-      return res.status(400).json({ message: "Failed to Fetch Table Data" });
+
+  if (search || search == "") {
+    try {
+      if (!search || search.length > 40) {
+        return res.status(400).json({ message: "Invalid or too long input" });
+      }
+  
+      // Generate Embedding
+      const embeddingResult = await OPEN_AI.embeddings.create({
+        model: "text-embedding-3-large",
+        input: search,
+      });
+  
+      const embedding = embeddingResult.data[0].embedding;
+  
+      const { data: tableData, error: semanticSearchError } =
+        await supabase.rpc("find_similar_professors_by_vector", {
+          student_embedding: embedding,
+          match_threshold: 0.2,
+          page_size: 20,
+          page_offset: pageOffset,
+        });
+      console.log(semanticSearchError);
+      if (semanticSearchError) {
+        return res.status(400).json({ message: "Supabase Fetch Error" });
+      }
+      const tableCount = tableData.length
+      return res.status(200).json({ tableData, tableCount });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Internal Server Error" });
     }
-    console.log(tableCount)
-    return res.status(200).json({ tableData, tableCount });
-  } catch (err) {
-    console.log(err)
-    return res.status(500).json({ message: "Internal Server Error" });
+  } else {
+    try {
+      const {
+        data: tableData,
+        count: tableCount,
+        error: tableFetchError,
+      } = await supabase
+        .from("Taishan")
+        .select(
+          "id, name, url, school, department, faculty, bio, email, labs, lab_url",
+          { count: "exact" }
+        )
+        .range(from, to);
+      console.log(tableFetchError);
+      if (tableFetchError) {
+        return res.status(400).json({ message: "Failed to Fetch Table Data" });
+      }
+      console.log(tableCount);
+      return res.status(200).json({ tableData, tableCount });
+    } catch (err) {
+      console.log(err);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
   }
 });
 
@@ -1955,6 +2032,7 @@ app.get("/kanban/get-followup/:userId", async (req, res) => {
   }
 });
 
+//Finish these
 app.post("/kanban/add-followup/:userId/:professorId", async (req, res) => {
   const { userId, professorId } = req.params;
   const {
