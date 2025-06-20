@@ -1913,26 +1913,42 @@ app.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
   }
 });
 
-//Semantic Search
+//filter
 app.get("/taishan/filter", async (req, res) => {
-  const { type, value } = req.query;
+  const { page = 1, ...filters } = req.query;
+  const pageNumber = parseInt(page);
+  const limit = 20;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
 
   try {
-    const { data: tableData, error: tableDataFetchError } = await supabase
+    let query = supabase
       .from("Taishan")
       .select(
         "id, name, url, school, department, faculty, bio, email, labs, lab_url, research_interests",
         { count: "exact" }
-      )
-      .eq(type, value);
+      );
 
-    if (tableDataFetchError) {
+    for (const [key, rawValue] of Object.entries(filters)) {
+      const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+      const cleanValues = values.map((v) => v.trim()).filter(Boolean);
+      if (cleanValues.length > 0) {
+        query = query.in(key, cleanValues);
+      }
+    }
+
+    query = query.range(from, to);
+    const { data: tableData, error } = await query;
+
+    if (error) {
+      console.error(error);
       return res.status(400).json({ message: "Failed To Fetch Filtered Data" });
     }
 
     return res.status(200).json({ tableData });
-  } catch {
-    return res.status(500).json({message: "Internal Server Error"})
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -2126,110 +2142,6 @@ app.get("/kanban/get-completed-professor-ids/:userId", async (req, res) => {
     }
 
     return res.status(200).json({ data: completedData });
-  } catch {
-    return res.status(500).json({ message: "Internal Service Error" });
-  }
-});
-
-app.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
-  const { userId, professorId } = req.params;
-
-  if (!userId || !professorId) {
-    return res.status(400).json({ message: "Frontend Error" });
-  }
-
-  try {
-    // Insert into completed
-    const { data: inProgressData, error: inProgressFetchError } = await supabase
-      .from("InProgress")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("professor_id", professorId)
-      .single();
-
-    if (inProgressFetchError) {
-      return res.status(400).json({ message: "fetch error" });
-    }
-    const { error: completedInsertionError } = await supabase
-      .from("Completed")
-      .insert({
-        user_id: inProgressData.user_id,
-        professor_id: inProgressData.professor_id,
-        name: inProgressData.name,
-        email: inProgressData.email,
-        url: inProgressData.url,
-        lab_url: inProgressData.lab_url,
-        labs: inProgressData.labs,
-        department: inProgressData.department,
-        faculty: inProgressData.faculty,
-        school: inProgressData.school,
-        research_interests: inProgressData.research_interests,
-        comments: inProgressData.comments,
-      })
-      .single();
-
-    if (completedInsertionError) {
-      return res
-        .status(400)
-        .json({ message: "Failed to update application columns." });
-    }
-
-    // delete from in progress
-    const { error: inProgressDeletionError } = await supabase
-      .from("InProgress")
-      .delete()
-      .eq("user_id", userId)
-      .eq("professor_id", professorId);
-
-    if (inProgressDeletionError) {
-      return res.status(400).json({ message: "Failed to delete" });
-    }
-
-    return res
-      .status(200)
-      .json({ message: "Professor successfully added to 'Completed' column." });
-  } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
-app.delete(
-  "/kanban/delete-completed/:userId/:professorId",
-  async (req, res) => {
-    const { userId, professorId } = req.params;
-    try {
-      const { error: deletionError } = await supabase
-        .from("Completed")
-        .delete()
-        .eq("user_id", userId)
-        .eq("professor_id", professorId);
-
-      if (deletionError) {
-        return res.status(400).json({ message: "Failed to delete" });
-      }
-
-      return res.status(200).json({ message: "Delete Successful" });
-    } catch (error) {
-      return res.status(500).json({ message: "Internal Server Error" });
-    }
-  }
-);
-
-//In Progress KANBAN Starts Here
-app.get("/kanban/get-in-progress/:userId", async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const { data: savedData, error: savedFetchError } = await supabase
-      .from("InProgress")
-      .select("*")
-      .eq("user_id", userId)
-      .limit(10);
-
-    if (savedFetchError) {
-      return res.status(400).json({ message: "Unable to Fetch Data" });
-    }
-
-    return res.status(200).json({ data: savedData });
   } catch {
     return res.status(500).json({ message: "Internal Service Error" });
   }
