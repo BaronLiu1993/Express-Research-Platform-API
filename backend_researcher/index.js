@@ -11,8 +11,10 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 import Mustache from "mustache";
 import { DateTime } from "luxon";
-import emailQueue from "./queue/queue.js";
-import "./queue/worker.js";
+import draftQueue from "./queue/draftQueue.js";
+import sendQueue from "./queue/sendQueue.js";
+import "./queue/sendWorker.js";
+import "./queue/draftWorker.js";
 
 //Test only
 
@@ -217,20 +219,27 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
 });
 
 //finish queue and then send everything after human review and AI bubble menu
-//Ensure that it is all sending and everything is moving around in supabase and the right things are
-//How to ensure it is unique 
-//remove off saved and in progres sshould be unique 
+//Ensure that it is all sending and everything is moving around in supabase and the right things are going 
+//to the right places QA testing after this essentially and work on the AI bubble menu
 app.post("/gmail/mass-send", async(req, res) => {
-  const { userId, professorIdArray} = req.body
-
+  const { userId, userEmail, userName, professorData} = req.body
+  //Array of professorIdArray
   try {
-    const jobs = professorIdArray.map(professorId => ({
+    const jobs = professorData.map(professor => ({
       name: "send-email",
       data: {
         userId,
-        professorId
+        userEmail,
+        userName,
+        body: {
+          professorId: professor.id,
+          professorEmail: professor.email,
+          professorName: professor.name
+        }
       }
     }))
+    console.log(jobs)
+    console.log(jobs[0])
     const addedJobs = await sendQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {
@@ -240,6 +249,7 @@ app.post("/gmail/mass-send", async(req, res) => {
 
 app.post("/gmail/snippet-create-draft", async (req, res) => {
   const { userId, professorData, baseBody } = req.body;
+  console.log(professorData)
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
@@ -253,7 +263,7 @@ app.post("/gmail/snippet-create-draft", async (req, res) => {
         },
       },
     }));
-    const addedJobs = await emailQueue.addBulk(jobs);
+    const addedJobs = await draftQueue.addBulk(jobs);
     console.log(jobs);
     console.log(jobs[0].data);
     console.log(jobs[0].data.body.dynamicFields);
@@ -285,7 +295,8 @@ app.post("/snippets/insert/:userId", async (req, res) => {
       })
       .select("id")
       .single();
-    return res.status(200).json({ message: insertionData.id });
+    const snippetId = insertionData.id
+    return res.status(200).json({ snippetId });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });
   }
@@ -2472,6 +2483,7 @@ app.get("/kanban/get-saved/:userId", async (req, res) => {
 
 app.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
   const { userId, professorId } = req.params;
+  
   const {
     name,
     email,
@@ -2484,7 +2496,7 @@ app.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
     school,
     comments,
   } = req.body;
-
+  console.log(email)
   try {
     const { error: savedInsertionError } = await supabase
       .from("Saved")

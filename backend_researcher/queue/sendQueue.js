@@ -1,7 +1,7 @@
 import { Connection } from "../redis/redis.js";
 import { Queue } from "bullmq";
 
-const emailQueue = new Queue('generate-draft', {
+const sendQueue = new Queue('send-email', {
     connection: Connection,
     defaultJobOptions: {
       removeOnComplete: 100,
@@ -14,4 +14,4 @@ const emailQueue = new Queue('generate-draft', {
     },
   });
 
-  export default emailQueue
+  export default sendQueue

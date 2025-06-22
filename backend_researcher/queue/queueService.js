@@ -20,6 +20,26 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
+function extractHtmlOrPlainText(payload) {
+  if (!payload) return null;
+
+  if (
+    (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
+    payload.body?.data
+  ) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+
+  if (payload.parts && Array.isArray(payload.parts)) {
+    for (const part of payload.parts) {
+      const result = getLatestReply(part);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
 function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
   const mimeMessage = [
     `To: ${to}`,
@@ -100,17 +120,32 @@ export async function generateDraftFromSnippetEmail({
       },
     ]);
 
+    //move from saved to inprogress now
+    const { data: savedData } = await supabase
+      .from("Saved")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("professor_id", professorId)
+      .single();
+
+    if (savedData) {
+      await supabase.from("InProgress").insert(savedData);
+      await supabase
+        .from("Saved")
+        .delete()
+        .eq("user_id", userId)
+        .eq("professor_id", professorId);
+    }
     console.log(insertionError);
 
-    return { message: "Draft successfully created", draftId: draft.data.id };
+    return { message: "Draft successfully created" };
   } catch (error) {
     console.error("Draft creation failed:", error);
     return { message: "Failed to create draft" };
   }
 }
 
-export async function sendSnippetEmail({ userId, professorId }) {
-
+export async function sendSnippetEmail({ userId, userEmail, userName, body }) {
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
@@ -129,16 +164,19 @@ export async function sendSnippetEmail({ userId, professorId }) {
     .from("Emails")
     .select("draft_id, tracking_id")
     .eq("user_id", userId)
-    .eq("professor_id", professorId)
+    .eq("professor_id", body.professorId)
     .eq("type", "draft")
     .single();
 
   //build tracking pixel
   const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+
   const draft = await gmail.users.drafts.get({
     userId: "me",
     id: draftData.draft_id,
   });
+
+  console.log(draft)
 
   //Parsing the payload and breaking it down
   const payload = draft.data.message.payload;
@@ -148,48 +186,52 @@ export async function sendSnippetEmail({ userId, professorId }) {
   const finalHtmlBody = htmlBody + trackingPixel;
 
   //Send the draft
-  const rawDraft = makeBody(to, fromName, fromEmail, subject, finalHtmlBody);
+  console.log(body.professorEmail)
+  const raw = makeBody(body.professorEmail, userName, userEmail, subject, finalHtmlBody);
   // Create Gmail Draft
 
   await gmail.users.drafts.update({
     userId: "me",
     id: draftData.draft_id,
-    requestBody: { message: { rawDraft } },
+    requestBody: { message: { raw } },
   });
-  //Update with Tracking ID
+
+  const sendResponse = await gmail.users.drafts.send({
+    userId: "me",
+    requestBody: {
+      id: draftData.draft_id,
+    },
+  });
+
+  console.log(sendResponse)
 
   const { error: insertionError } = await supabase
     .from("Emails")
     .update({
       sent: true,
       type: "first",
+      thread_id: sendResponse.data.threadId,
     })
     .eq("draft_id", draftData.draft_id);
+    
 
   const { data: inProgressData } = await supabase
     .from("InProgress")
     .select("*")
     .eq("user_id", userId)
-    .eq("professor_id", professorId)
+    .eq("professor_id", body.professorId)
     .single();
 
-  if (savedData) {
+  if (inProgressData) {
     await supabase.from("Completed").insert(inProgressData);
     await supabase
       .from("InProgress")
       .delete()
       .eq("user_id", userId)
-      .eq("professor_id", professorId);
+      .eq("professor_id", body.professorId);
   }
 
-  const sendResponse = await gmail.users.drafts.send({
-    userId: "me",
-    requestBody: {
-      id: draftIdData.draft_id,
-    },
-  });
-
-  const startTime = DateTime.now()
+  /*const startTime = DateTime.now()
     .setZone(timeZone)
     .plus({ days: 7 })
     .set({ hour: 12, minute: 0, second: 0 })
@@ -208,23 +250,13 @@ export async function sendSnippetEmail({ userId, professorId }) {
       ],
     },
   };
-  await calendar.events.insert({ calendarId: "primary", resource: event });
-  await supabase
-    .from("Emails")
-    .update({
-      user_id: userId,
-      thread_id: sendResponse.data.threadId,
-      type: "First",
-      sent: true,
-    })
-    .eq("professor_id", parseInt(professorId))
-    .eq("user_id", userId)
-    .eq("type", "Draft");
+  await calendar.events.insert({ calendarId: "primary", resource: event }); */
+
 
   await supabase.from("Messages").insert({
     thread_id: sendResponse.data.threadId,
     message_id: sendResponse.data.id,
-    tracking_id: trackingId,
+    tracking_id: draftData.tracking_id,
     type: "First",
   });
 
