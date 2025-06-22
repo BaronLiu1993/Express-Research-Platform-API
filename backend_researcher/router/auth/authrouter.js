@@ -69,7 +69,7 @@ router.post("/auth/register", async (req, res) => {
 
     if (profileError) {
       await supabase.auth.admin.deleteUser(userId);
-      return res.status(400).json({ message: profileError.message });
+      return res.status(400).json({ message: "Failed to Save User Data" });
     }
 
     return res.status(201).json({ message: "Sucessfully Registered" });

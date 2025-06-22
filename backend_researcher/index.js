@@ -9,6 +9,7 @@ import EmailReplyParser from "email-reply-parser";
 import { simpleParser } from "mailparser";
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import Mustache from "mustache";
 import { DateTime } from "luxon";
 import emailQueue from "./queue/queue.js";
 import "./queue/worker.js";
@@ -215,12 +216,33 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
   }
 });
 
-app.post("/gmail/snippet-send-bulk", async (req, res) => {
-  const { userId, professorData, baseBody } = req.body;
+//finish queue and then send everything after human review and AI bubble menu
+//Ensure that it is all sending and everything is moving around in supabase and the right things are
+//How to ensure it is unique 
+//remove off saved and in progres sshould be unique 
+app.post("/gmail/mass-send", async(req, res) => {
+  const { userId, professorIdArray} = req.body
 
   try {
+    const jobs = professorIdArray.map(professorId => ({
+      name: "send-email",
+      data: {
+        userId,
+        professorId
+      }
+    }))
+    const addedJobs = await sendQueue.addBulk(jobs);
+    res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
+  } catch {
+    res.status(500).json({ message: "Failed to queue bulk emails" });
+  }
+})
+
+app.post("/gmail/snippet-create-draft", async (req, res) => {
+  const { userId, professorData, baseBody } = req.body;
+  try {
     const jobs = professorData.map((professor) => ({
-      name: "send-snippet-email",
+      name: "generate-draft",
       data: {
         userId,
         professorId: professor.id,
@@ -242,15 +264,22 @@ app.post("/gmail/snippet-send-bulk", async (req, res) => {
   }
 });
 
+function cleanSnippetPlaceholders(str) {
+  return str.replace(/\/(?=\{\{)/g, '');
+}
+
+//Put Snippet in There
 app.post("/snippets/insert/:userId", async (req, res) => {
   const { userId } = req.params;
   const { snippet_html, snippet_subject } = req.body;
+
+  const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html)
   try {
     const { data: insertionData, error: insertionError } = await supabase
       .from("snippets")
       .insert({
         user_id: userId,
-        snippet_html: snippet_html,
+        snippet_html: parsedSnippetHtml,
         snippet_subject: snippet_subject,
         snippet_name: "Test",
       })
@@ -1412,6 +1441,7 @@ app.put("/gmail/update-status/:threadId/", async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 app.get("/gmail/get-email-chain/:userId", async (req, res) => {
   const { userId } = req.params;
 
@@ -1930,6 +1960,7 @@ app.get("/taishan/filter", async (req, res) => {
       );
 
     for (const [key, rawValue] of Object.entries(filters)) {
+      if (key === "page") continue;
       const values = Array.isArray(rawValue) ? rawValue : [rawValue];
       const cleanValues = values.map((v) => v.trim()).filter(Boolean);
       if (cleanValues.length > 0) {
@@ -2024,7 +2055,6 @@ app.get("/taishan", async (req, res) => {
 
     return res.status(200).json({ tableData, tableCount });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
@@ -2142,6 +2172,110 @@ app.get("/kanban/get-completed-professor-ids/:userId", async (req, res) => {
     }
 
     return res.status(200).json({ data: completedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
+
+app.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+
+  if (!userId || !professorId) {
+    return res.status(400).json({ message: "Frontend Error" });
+  }
+
+  try {
+    // Insert into completed
+    const { data: inProgressData, error: inProgressFetchError } = await supabase
+      .from("InProgress")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("professor_id", professorId)
+      .single();
+
+    if (inProgressFetchError) {
+      return res.status(400).json({ message: "fetch error" });
+    }
+    const { error: completedInsertionError } = await supabase
+      .from("Completed")
+      .insert({
+        user_id: inProgressData.user_id,
+        professor_id: inProgressData.professor_id,
+        name: inProgressData.name,
+        email: inProgressData.email,
+        url: inProgressData.url,
+        lab_url: inProgressData.lab_url,
+        labs: inProgressData.labs,
+        department: inProgressData.department,
+        faculty: inProgressData.faculty,
+        school: inProgressData.school,
+        research_interests: inProgressData.research_interests,
+        comments: inProgressData.comments,
+      })
+      .single();
+
+    if (completedInsertionError) {
+      return res
+        .status(400)
+        .json({ message: "Failed to update application columns." });
+    }
+
+    // delete from in progress
+    const { error: inProgressDeletionError } = await supabase
+      .from("InProgress")
+      .delete()
+      .eq("user_id", userId)
+      .eq("professor_id", professorId);
+
+    if (inProgressDeletionError) {
+      return res.status(400).json({ message: "Failed to delete" });
+    }
+
+    return res
+      .status(200)
+      .json({ message: "Professor successfully added to 'Completed' column." });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+app.delete(
+  "/kanban/delete-completed/:userId/:professorId",
+  async (req, res) => {
+    const { userId, professorId } = req.params;
+    try {
+      const { error: deletionError } = await supabase
+        .from("Completed")
+        .delete()
+        .eq("user_id", userId)
+        .eq("professor_id", professorId);
+
+      if (deletionError) {
+        return res.status(400).json({ message: "Failed to delete" });
+      }
+
+      return res.status(200).json({ message: "Delete Successful" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  }
+);
+
+//In Progress KANBAN Starts Here
+app.get("/kanban/get-in-progress/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: savedData, error: savedFetchError } = await supabase
+      .from("InProgress")
+      .select("*")
+      .eq("user_id", userId)
+      .limit(10);
+
+    if (savedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
+    }
+
+    return res.status(200).json({ data: savedData });
   } catch {
     return res.status(500).json({ message: "Internal Service Error" });
   }
