@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@elastic/elasticsearch": "^8.17.1",
+    "@google-cloud/pubsub": "^5.1.0",
     "@supabase/supabase-js": "^2.49.4",
     "backend_researcher": "file:",
     "bcrypt": "^6.0.0",
