@@ -107,6 +107,30 @@ function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
     .replace(/=+$/, "");
 }
 
+function makeReplyBody(to, fromName, fromEmail, subject, htmlMessage, inReplyToMessageId = null) {
+  const headers = [
+    `To: ${to}`,
+    `From: ${fromName} <${fromEmail}>`,
+    `Subject: ${subject}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `MIME-Version: 1.0`,
+  ];
+
+  if (inReplyToMessageId) {
+    headers.push(`In-Reply-To: ${inReplyToMessageId}`);
+    headers.push(`References: ${inReplyToMessageId}`);
+  }
+
+  const mimeMessage = [...headers, "", htmlMessage].join("\n");
+
+  return Buffer.from(mimeMessage)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+
 function decodeBody(encoded) {
   let padded = encoded;
   while (padded.length % 4 !== 0) {
@@ -630,114 +654,157 @@ app.get("/auth/oauth2callback", async (req, res) => {
 });
 
 app.post(
-  "/gmail/create-follow-up-draft/:userId/:professorId",
+  "/gmail/create-follow-up-draft/:userId/:professorId/:threadId",
   async (req, res) => {
-    const { userId, professorId } = req.params;
+    const { userId, professorId, threadId } = req.params;
     const { to, fromName, fromEmail, subject, message } = req.body;
 
+    console.log("📥 Request Params:", { userId, professorId, threadId });
+    console.log("📥 Request Body:", { to, fromName, fromEmail, subject });
+
     if (!to || !fromName || !fromEmail) {
-      return res.status(400).json({});
+      console.error("❌ Missing required fields");
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    //Get Auth Tokens
+    // Fetch Gmail auth tokens
     const { data: tokenData, error: fetchError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
 
-    //Failed If unable to get Data
     if (fetchError || !tokenData) {
-      return res.status(401).json({});
+      console.error("❌ Failed to fetch token data:", fetchError);
+      return res.status(401).json({ message: "Auth tokens not found" });
     }
 
-    //Set credentials
+    console.log("🔐 Setting OAuth2 credentials");
     oauth2Client.setCredentials({
       access_token: tokenData.gmail_auth_token,
       refresh_token: tokenData.gmail_refresh_token,
     });
 
     try {
+      console.log("🔄 Refreshing access token");
       await oauth2Client.getAccessToken();
 
-      //Create the body
-      const trackingId = uuidv4();
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const raw = makeBody(to, fromName, fromEmail, subject, message);
+
+      console.log("📨 Fetching thread to reply to:", threadId);
+      const thread = await gmail.users.threads.get({
+        userId: "me",
+        id: threadId,
+      });
+
+      const messages = thread.data.messages;
+      const lastMessage = messages[messages.length - 1];
+      console.log("📨 Last message found:", lastMessage?.id);
+
+      const messageIdHeader = lastMessage.payload.headers.find(
+        (h) => h.name === "Message-ID"
+      );
+      const inReplyTo = messageIdHeader?.value;
+      console.log("📌 In-Reply-To header:", inReplyTo);
+
+      const trackingId = uuidv4();
+      const raw = makeReplyBody(
+        to,
+        fromName,
+        fromEmail,
+        subject,
+        message,
+        inReplyTo
+      );
+
+      console.log("📦 Creating draft");
       const draft = await gmail.users.drafts.create({
         userId: "me",
-        requestBody: { message: { raw } },
+        requestBody: { message: { raw, threadId } },
       });
+
+      console.log("📝 Draft created:", draft.data.id);
+
       const { error: insertionError } = await supabase.from("Emails").insert([
         {
           user_id: userId,
           professor_id: parseInt(professorId),
           draft_id: draft.data.id,
           type: "FollowUp",
-          //Default will be False Anyways So We Do Not Need To Insert It
           tracking_id: trackingId,
         },
       ]);
 
       if (insertionError) {
+        console.error("❌ Supabase insertion error:", insertionError);
         return res.status(400).json({ message: "Insertion Error" });
       }
 
+      console.log("✅ Follow-up draft created successfully");
       return res.status(200).json({ draftId: draft.data.id });
     } catch (error) {
-      return res.status(500).json({ message: "Internal Server Error" });
+      console.error("❌ Internal error:", error);
+      return res.status(500).json({ message: "Internal Server Error", error });
     }
   }
 );
 
 
-
 app.post("/gmail/send-follow-up/:userId/:draftId/:trackingId", async (req, res) => {
-    const { userId, draftId, trackingId } = req.params
-    try {
-      const { data: tokenData, error: tokenFetchError } = await supabase
-        .from("User_Profiles")
-        .select("gmail_auth_token, gmail_refresh_token")
-        .eq("user_id", userId)
-        .single();
+  const { userId, draftId, trackingId } = req.params;
 
-      if (tokenFetchError || !tokenData) {
-        return res.status(400).json({});
-      }
+  try {
+    const { data: tokenData, error: tokenFetchError } = await supabase
+      .from("User_Profiles")
+      .select("gmail_auth_token, gmail_refresh_token")
+      .eq("user_id", userId)
+      .single();
 
-      oauth2Client.setCredentials({
-        access_token: tokenData.gmail_auth_token,
-        refresh_token: tokenData.gmail_refresh_token,
-      });
+    if (tokenFetchError || !tokenData) {
+      return res.status(400).json({ error: "Missing or invalid tokens" });
+    }
 
-      await oauth2Client.getAccessToken();
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const sendResponse = await gmail.users.drafts.send({
-        userId: "me",
-        requestBody: {
-          id: draftId,
-        },
-      });
+    oauth2Client.setCredentials({
+      access_token: tokenData.gmail_auth_token,
+      refresh_token: tokenData.gmail_refresh_token,
+    });
 
-      await supabase
-        .from("Emails")
-        .update({
-          thread_id: sendResponse.data.threadId,
-          sent_at: new Date().toISOString(),
-          sent: true,
-        })
-        .eq("draft_id", draftId)
+    await oauth2Client.getAccessToken();
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-      await supabase.from("Messages").insert({
-        thread_id: sendResponse.data.threadId,
-        message_id: sendResponse.data.id,
-        tracking_id: trackingId,
-        type: "FollowUp",
-      });
-  } catch {
+    const sendResponse = await gmail.users.drafts.send({
+      userId: "me",
+      requestBody: {
+        id: draftId,
+      },
+    });
 
+
+    const { threadId, id: messageId } = sendResponse.data;
+
+    await supabase
+      .from("Emails")
+      .update({
+        thread_id: threadId,
+        sent_at: new Date().toISOString(),
+        sent: true,
+      })
+      .eq("draft_id", draftId);
+
+    await supabase.from("Messages").insert({
+      thread_id: threadId,
+      message_id: messageId,
+      tracking_id: trackingId,
+      type: "FollowUp",
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("[SEND] Follow-up send error:", err);
+    return res.status(500).json({ message: "Failed To Send" });
   }
-})
+});
+
 
 app.get(
   "/gmail/resume-follow-up-draft/:userId/:professorId",
@@ -1053,7 +1120,7 @@ app.delete(
 );
 
 app.put(
-  "/gmail/update-follow-up-draft/:userId/:professorId",
+  "/gmail/update-follow-up-draft/:userId/:professorId/:threadId",
   async (req, res) => {
     const { userId, professorId } = req.params;
     const { to, fromName, fromEmail, subject, body } = req.body;
@@ -1676,6 +1743,7 @@ app.get("/gmail/get-email-chain/:userId", async (req, res) => {
 
 app.get("/gmail/get-full-email-chain/:userId/:threadId", async (req, res) => {
   const { userId, threadId } = req.params;
+
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
@@ -1683,59 +1751,76 @@ app.get("/gmail/get-full-email-chain/:userId/:threadId", async (req, res) => {
     .single();
 
   if (tokenFetchError || !tokenData) {
+    console.error("❌ Token fetch error:", tokenFetchError);
     return res.status(401).json({ error: "Token fetch error" });
   }
+
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
     refresh_token: tokenData.gmail_refresh_token,
   });
+
   try {
     await oauth2Client.getAccessToken();
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
     });
 
-    const messageArray = [];
     const messages = threadData?.data?.messages || [];
-    const messagesLength = messages.length;
+    const messageArray = [];
 
-    for (let i = 0; i < messagesLength; i++) {
-      const message = threadData.data.messages[i];
-      const labels = messages[i].labelIds || [];
+    // Step 4: Loop through each message
+    for (const message of messages) {
+      const labels = message.labelIds || [];
+
+      // Fetch full message content
       const messageData = await gmail.users.messages.get({
         userId: "me",
         id: message.id,
         format: "raw",
       });
 
-      
-      const response = await simpleParser(decodeBody(messageData.data.raw));
-      const email = new EmailReplyParser().read(response.text);
-      const body = email.getVisibleText();
-      const toObj = response.to.value;
-      const to = toObj[0];
-      const fromObj = response.from.value;
-      const from = fromObj[0];
-      const subject = response.subject;
-      const date = response.date;
+      const decoded = decodeBody(messageData.data.raw);
 
-      const messageObj = {
+      const parsed = await simpleParser(decoded);
+
+      if (!parsed.text && !parsed.html && !parsed.textAsHtml) {
+        continue;
+      }
+
+      const rawText = parsed.text || parsed.html || parsed.textAsHtml || "";
+      const email = new EmailReplyParser().read(rawText);
+      const body = email.getVisibleText();
+
+      if (!body || body.trim().length === 0) {
+        continue;
+      }
+
+      // Parse headers
+      const to = parsed.to?.value?.[0] || null;
+      const from = parsed.from?.value?.[0] || null;
+      const subject = parsed.subject || "";
+      const date = parsed.date || "";
+
+      if (!to || !from) {
+        continue;
+      }
+
+      messageArray.push({
         labels,
         to,
         from,
         subject,
         body,
         date,
-      };
-
-      messageArray.push(messageObj);
+      });
     }
 
     return res.status(200).json({ messageArray });
   } catch (err) {
-    console.log(err)
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
