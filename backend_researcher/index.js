@@ -15,7 +15,7 @@ import draftQueue from "./queue/draftQueue.js";
 import sendQueue from "./queue/sendQueue.js";
 import "./queue/sendWorker.js";
 import "./queue/draftWorker.js";
-import "./pubsub/subListener.js"
+import "./pubsub/subListener.js";
 
 //Test only
 
@@ -63,6 +63,7 @@ const scopes = [
 //Helper Functions
 
 //Configure GMAIL Watch
+/*
 async function setupWatch(userTokens) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -86,7 +87,7 @@ async function setupWatch(userTokens) {
 
   // Save the historyId for future reference (optional)
   return res.data.historyId;
-}
+} */
 
 function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
   const mimeMessage = [
@@ -107,7 +108,14 @@ function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
     .replace(/=+$/, "");
 }
 
-function makeReplyBody(to, fromName, fromEmail, subject, htmlMessage, inReplyToMessageId = null) {
+function makeReplyBody(
+  to,
+  fromName,
+  fromEmail,
+  subject,
+  htmlMessage,
+  inReplyToMessageId = null
+) {
   const headers = [
     `To: ${to}`,
     `From: ${fromName} <${fromEmail}>`,
@@ -129,7 +137,6 @@ function makeReplyBody(to, fromName, fromEmail, subject, htmlMessage, inReplyToM
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
-
 
 function decodeBody(encoded) {
   let padded = encoded;
@@ -168,24 +175,22 @@ function removeCurlyBraces(input) {
 
 //for UI only
 app.get("/get-all-snippets/:userId", async (req, res) => {
-  const { userId } = req.params
+  const { userId } = req.params;
   try {
-    const { data: snippetData, error: snippetFetchError} = await supabase
+    const { data: snippetData, error: snippetFetchError } = await supabase
       .from("snippets")
       .select("snippet_name, snippet_subject, snippet_html")
-      .eq("user_id", userId)
-    
-      if (snippetFetchError) {
-        return res.status(400).json({message: "Failed to Fetch Data"})
-      }
+      .eq("user_id", userId);
 
-      return res.status(201).json({message: snippetData})
+    if (snippetFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch Data" });
+    }
+
+    return res.status(201).json({ message: snippetData });
   } catch {
-    return res.status(500).json({ message: "Internal Server Error"})
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-})
-
-
+});
 
 app.get("/get-publications/:professorId", async (req, res) => {
   const { professorId } = req.params;
@@ -206,8 +211,6 @@ app.get("/get-publications/:professorId", async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
-
 
 app.post("/sync-fetchable-variables/:userId", async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
@@ -293,13 +296,13 @@ app.post("/sync-fetchable-variables/:userId", async (req, res) => {
 });
 
 //finish queue and then send everything after human review and AI bubble menu
-//Ensure that it is all sending and everything is moving around in supabase and the right things are going 
+//Ensure that it is all sending and everything is moving around in supabase and the right things are going
 //to the right places QA testing after this essentially and work on the AI bubble menu
-app.post("/gmail/mass-send", async(req, res) => {
-  const { userId, userEmail, userName, professorData} = req.body
+app.post("/gmail/mass-send", async (req, res) => {
+  const { userId, userEmail, userName, professorData } = req.body;
   //Array of professorIdArray
   try {
-    const jobs = professorData.map(professor => ({
+    const jobs = professorData.map((professor) => ({
       name: "send-email",
       data: {
         userId,
@@ -308,22 +311,22 @@ app.post("/gmail/mass-send", async(req, res) => {
         body: {
           professorId: professor.id,
           professorEmail: professor.email,
-          professorName: professor.name
-        }
-      }
-    }))
-    console.log(jobs)
-    console.log(jobs[0])
+          professorName: professor.name,
+        },
+      },
+    }));
+    console.log(jobs);
+    console.log(jobs[0]);
     const addedJobs = await sendQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
-})
+});
 
 app.post("/gmail/snippet-create-draft", async (req, res) => {
   const { userId, professorData, baseBody } = req.body;
-  console.log(professorData)
+  console.log(professorData);
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
@@ -349,7 +352,7 @@ app.post("/gmail/snippet-create-draft", async (req, res) => {
 });
 
 function cleanSnippetPlaceholders(str) {
-  return str.replace(/\/(?=\{\{)/g, '');
+  return str.replace(/\/(?=\{\{)/g, "");
 }
 
 //Put Snippet in There
@@ -357,7 +360,7 @@ app.post("/snippets/insert/:userId", async (req, res) => {
   const { userId } = req.params;
   const { snippet_html, snippet_subject } = req.body;
 
-  const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html)
+  const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
   try {
     const { data: insertionData, error: insertionError } = await supabase
       .from("snippets")
@@ -369,7 +372,7 @@ app.post("/snippets/insert/:userId", async (req, res) => {
       })
       .select("id")
       .single();
-    const snippetId = insertionData.id
+    const snippetId = insertionData.id;
     return res.status(200).json({ snippetId });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });
@@ -627,7 +630,6 @@ app.get("/auth/gmail-data/:userId", (req, res) => {
 app.get("/auth/oauth2callback", async (req, res) => {
   const code = req.query.code;
   const userId = req.query.state;
-  setupWatch(code)
   if (!code || !userId) {
     return res.status(400).send("Missing authorization code");
   }
@@ -686,12 +688,10 @@ app.post(
     });
 
     try {
-      console.log("🔄 Refreshing access token");
       await oauth2Client.getAccessToken();
 
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-      console.log("📨 Fetching thread to reply to:", threadId);
       const thread = await gmail.users.threads.get({
         userId: "me",
         id: threadId,
@@ -699,13 +699,11 @@ app.post(
 
       const messages = thread.data.messages;
       const lastMessage = messages[messages.length - 1];
-      console.log("📨 Last message found:", lastMessage?.id);
 
       const messageIdHeader = lastMessage.payload.headers.find(
         (h) => h.name === "Message-ID"
       );
       const inReplyTo = messageIdHeader?.value;
-      console.log("📌 In-Reply-To header:", inReplyTo);
 
       const trackingId = uuidv4();
       const raw = makeReplyBody(
@@ -717,13 +715,10 @@ app.post(
         inReplyTo
       );
 
-      console.log("📦 Creating draft");
       const draft = await gmail.users.drafts.create({
         userId: "me",
         requestBody: { message: { raw, threadId } },
       });
-
-      console.log("📝 Draft created:", draft.data.id);
 
       const { error: insertionError } = await supabase.from("Emails").insert([
         {
@@ -736,97 +731,170 @@ app.post(
       ]);
 
       if (insertionError) {
-        console.error("❌ Supabase insertion error:", insertionError);
         return res.status(400).json({ message: "Insertion Error" });
       }
 
-      console.log("✅ Follow-up draft created successfully");
       return res.status(200).json({ draftId: draft.data.id });
     } catch (error) {
-      console.error("❌ Internal error:", error);
+      console.log(error)
       return res.status(500).json({ message: "Internal Server Error", error });
     }
   }
 );
 
+app.post(
+  "/gmail/send-follow-up/:userId/:draftId/:trackingId",
+  async (req, res) => {``
+    const { userId, draftId, trackingId } = req.params;
 
-app.post("/gmail/send-follow-up/:userId/:draftId/:trackingId", async (req, res) => {
-  const { userId, draftId, trackingId } = req.params;
+    try {
+      const { data: tokenData, error: tokenFetchError } = await supabase
+        .from("User_Profiles")
+        .select("gmail_auth_token, gmail_refresh_token")
+        .eq("user_id", userId)
+        .single();
+
+      if (tokenFetchError || !tokenData) {
+        return res.status(400).json({ error: "Missing or invalid tokens" });
+      }
+
+      oauth2Client.setCredentials({
+        access_token: tokenData.gmail_auth_token,
+        refresh_token: tokenData.gmail_refresh_token,
+      });
+
+      await oauth2Client.getAccessToken();
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+      const sendResponse = await gmail.users.drafts.send({
+        userId: "me",
+        requestBody: {
+          id: draftId,
+        },
+      });
+
+      const { threadId, id: messageId } = sendResponse.data;
+
+      await supabase
+        .from("Emails")
+        .update({
+          thread_id: threadId,
+          sent_at: new Date().toISOString(),
+          sent: true,
+        })
+        .eq("draft_id", draftId);
+
+      await supabase.from("Messages").insert({
+        thread_id: threadId,
+        message_id: messageId,
+        tracking_id: trackingId,
+        type: "FollowUp",
+      });
+
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("[SEND] Follow-up send error:", err);
+      return res.status(500).json({ message: "Failed To Send" });
+    }
+  }
+);
+
+app.get("/gmail/resume-follow-up-draft/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  console.log(`[START] Fetching follow-up draft for userId=${userId}, professorId=${professorId}`);
+
+  // Step 1: Fetch draft info from Supabase
+  const { data: draftData, error: draftFetchError } = await supabase
+    .from("Emails")
+    .select("draft_id, tracking_id")
+    .eq("user_id", userId)
+    .eq("professor_id", professorId)
+    .eq("type", "FollowUp")
+    .eq("sent", false)
+    .single();
+
+  if (draftFetchError) {
+    console.error(`[ERROR] Fetching draft from Supabase:`, draftFetchError);
+  } else {
+    console.log(`[SUCCESS] Retrieved draft data from Supabase:`, draftData);
+  }
+
+  if (!draftData || !draftData.draft_id) {
+    console.warn(`[INFO] No draft found for given user and professor.`);
+    return res.status(200).json({ draftExists: false });
+  }
+
+  // Step 2: Get user Gmail tokens from Supabase
+  const { data: tokenData, error: tokenFetchError } = await supabase
+    .from("User_Profiles")
+    .select("gmail_auth_token, gmail_refresh_token")
+    .eq("user_id", userId)
+    .single();
+
+  if (tokenFetchError) {
+    console.error(`[ERROR] Fetching Gmail tokens from Supabase:`, tokenFetchError);
+  } else {
+    console.log(`[SUCCESS] Retrieved Gmail tokens from Supabase.`);
+  }
+
+  if (
+    !tokenData ||
+    !tokenData.gmail_auth_token ||
+    !tokenData.gmail_refresh_token
+  ) {
+    console.warn(`[INFO] Missing Gmail tokens for user.`);
+    return res.status(404).json({});
+  }
+
+  // Step 3: Set tokens on OAuth client
+  oauth2Client.setCredentials({
+    access_token: tokenData.gmail_auth_token,
+    refresh_token: tokenData.gmail_refresh_token,
+  });
 
   try {
-    const { data: tokenData, error: tokenFetchError } = await supabase
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (tokenFetchError || !tokenData) {
-      return res.status(400).json({ error: "Missing or invalid tokens" });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
-
+    console.log(`[INFO] Attempting to refresh Gmail access token...`);
     await oauth2Client.getAccessToken();
+
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    const sendResponse = await gmail.users.drafts.send({
+    console.log(`[INFO] Fetching Gmail draft with id=${draftData.draft_id}...`);
+    const draft = await gmail.users.drafts.get({
       userId: "me",
-      requestBody: {
-        id: draftId,
-      },
+      id: draftData.draft_id,
     });
 
+    console.log(`[SUCCESS] Gmail draft fetched.`);
 
-    const { threadId, id: messageId } = sendResponse.data;
+    const payload = draft.data.message.payload;
+    const headers = payload.headers || [];
+    const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    const htmlBody = extractHtmlOrPlainText(payload);
 
-    await supabase
-      .from("Emails")
-      .update({
-        thread_id: threadId,
-        sent_at: new Date().toISOString(),
-        sent: true,
-      })
-      .eq("draft_id", draftId);
+    console.log(`[INFO] Extracted subject: ${subject}`);
 
-    await supabase.from("Messages").insert({
-      thread_id: threadId,
-      message_id: messageId,
-      tracking_id: trackingId,
-      type: "FollowUp",
+    return res.status(200).json({
+      tracking_id: draftData.tracking_id,
+      draft_id: draftData.draft_id,
+      draftExists: true,
+      subject: subject,
+      body: htmlBody,
     });
+  } catch (error) {
+    console.error(`[ERROR] Gmail API call failed:`, error?.response?.data || error);
 
-    return res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("[SEND] Follow-up send error:", err);
-    return res.status(500).json({ message: "Failed To Send" });
+    if (error.response?.data?.error?.code === 401) {
+      return res.status(200).json({ draftExists: false });
+    }
+
+    return res.status(500).json({ draftExists: false });
   }
 });
 
-
-app.get(
-  "/gmail/resume-follow-up-draft/:userId/:professorId",
+app.delete(
+  "/gmail/delete-follow-up-draft/:userId/:draftId",
   async (req, res) => {
-    //Params to get the draft data
-    const { userId, professorId } = req.params;
-
-    //Draft Data
-    const { data: draftData, error: draftFetchError } = await supabase
-      .from("Emails")
-      .select("draft_id, tracking_id")
-      .eq("user_id", userId)
-      .eq("professor_id", professorId)
-      .eq("type", "FollowUp")
-      .eq("sent", false)
-      .single();
-    if (draftFetchError || !draftData || !draftData.draft_id) {
-      return res.status(200).json({
-        draftExists: false,
-      });
-    }
-
+    const { userId, draftId } = req.params;
     const { data: tokenData, error: tokenFetchError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
@@ -846,268 +914,19 @@ app.get(
       access_token: tokenData.gmail_auth_token,
       refresh_token: tokenData.gmail_refresh_token,
     });
-
-    try {
-      await oauth2Client.getAccessToken();
-
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-      const draft = await gmail.users.drafts.get({
-        userId: "me",
-        id: draftData.draft_id,
-      });
-
-      //Parsing the payload and breaking it down
-      const payload = draft.data.message.payload;
-      const headers = payload.headers || [];
-      const subject = headers.find((h) => h.name === "Subject")?.value || "";
-      const htmlBody = extractHtmlOrPlainText(payload);
-      console.log(payload)
-      return res.status(200).json({
-        tracking_id: draftData.tracking_id,
-        draft_id: draftData.draft_id,
-        draftExists: true,
-        subject: subject,
-        body: htmlBody,
-      });
-    } catch (error) {
-      if (error.response?.data?.error?.code === 401) {
-        return res.status(200).json({ draftExists: false });
-      }
-
-      return res.status(500).json({ draftExists: false });
-    }
-  }
-);
-
-app.delete(
-  "/gmail/delete-follow-up-draft/:userId/:professorId",
-  async (req, res) => {
-    const { userId, professorId } = req.params;
-    try {
-      const { error: draftDeleteError } = await supabase
-        .from("Emails")
-        .delete()
-        .eq("user_id", userId)
-        .eq("professor_id", professorId)
-        .eq("type", "FollowUp")
-        .eq("sent", false)
-        .single();
-
-      if (draftDeleteError) {
-        return res.status(400).json({ message: "Failed To Delete" });
-      }
-    } catch {
-      return res.status(500).json({ message: "Internal Server Errors" });
-    }
-  }
-);
-
-app.put(
-  "/gmail/update-follow-up-draft/:userId/:professorId",
-  async (req, res) => {
-    const { userId, professorId } = req.params;
-    const { to, fromName, fromEmail, subject, body } = req.body;
-    console.log(to)
-    console.log(fromName)
-    console.log(fromEmail)
-    console.log(subject)
-    console.log(body)
-    console.log(userId)
-    console.log(professorId)
-
-
-
-    const { data: draftData, error: draftFetchError } = await supabase
-      .from("Emails")
-      .select("draft_id")
-      .eq("user_id", userId)
-      .eq("professor_id", professorId)
-      .eq("type", "FollowUp")
-      .eq("sent", false)
-      .single()
     
-    console.log(draftData)
-
-
-    if (!draftData || draftFetchError || !draftData.draft_id) {
-      return res.status(401).json({ updated: false });
-    }
-
-    const { data: tokenData, error: tokenFetchError } = await supabase
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (!tokenData || tokenFetchError) {
-      return res.status(401).json({ updated: false });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
-
-    const raw = makeBody(to, fromName, fromEmail, subject, body);
     try {
       await oauth2Client.getAccessToken();
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-      const draft = await gmail.users.drafts.update({
+      const draft = await gmail.users.drafts.delete({
         userId: "me",
-        id: draftData.draft_id,
-        requestBody: { message: { raw } },
+        id: draftId,
       });
 
-      return res.status(200).json({ updated: true });
-    } catch (err) {
-      console.log(err)
-      return res.status(500).json({ updated: false });
-    }
-  }
-);
-
-app.post("/gmail/create-reply-draft/:userId/professorId", async (req, res) => {
-  const { userId, professorId } = req.params;
-  const { to, fromName, fromEmail, subject, message } = req.body;
-
-  if (!to || !fromName || !fromEmail || !subject || !message) {
-    return res.status(400).json({});
-  }
-
-  //Get Auth Tokens
-  const { data: tokenData, error: fetchError } = await supabase
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
-
-  //Failed If unable to get Data
-  if (fetchError || !tokenData) {
-    return res.status(401).json({});
-  }
-
-  //Set credentials
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
-  });
-
-  try {
-    await oauth2Client.getAccessToken();
-
-    //Create the body
-    const trackingId = uuidv4();
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const raw = makeBody(to, fromName, fromEmail, subject, message);
-    const draft = await gmail.users.drafts.create({
-      userId: "me",
-      requestBody: { message: { raw } },
-    });
-    const { error: insertionError } = await supabase.from("Emails").insert([
-      {
-        user_id: userId,
-        professor_id: parseInt(professorId),
-        draft_id: draft.data.id,
-        type: "Reply",
-        //Sent should automatically be false
-        tracking_id: trackingId,
-      },
-    ]);
-
-    if (insertionError) {
-      return res.status(400).json({ message: "Insertion Error" });
-    }
-
-    return res.status(200).json({ draftId: draft.data.id });
-  } catch (error) {
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
-app.get("/gmail/resume-reply-draft/:userId/:professorId", async (req, res) => {
-  //Params to get the draft data
-  const { userId, professorId } = req.params;
-
-  //Draft Data
-  const { data: draftData, error: draftFetchError } = await supabase
-    .from("Emails")
-    .select("draft_id")
-    .eq("user_id", userId)
-    .eq("professor_id", professorId)
-    .eq("type", "Reply")
-    .eq("sent", false)
-    .single();
-
-  if (draftFetchError || !draftData || !draftData.draft_id) {
-    return res.status(200).json({
-      draftExists: false,
-    });
-  }
-
-  const { data: tokenData, error: tokenFetchError } = await supabase
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
-
-  if (
-    tokenFetchError ||
-    !tokenData ||
-    !tokenData.gmail_auth_token ||
-    !tokenData.gmail_refresh_token
-  ) {
-    return res.status(404).json({});
-  }
-
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
-  });
-
-  try {
-    await oauth2Client.getAccessToken();
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-    const draft = await gmail.users.drafts.get({
-      userId: "me",
-      id: draftData.draft_id,
-    });
-
-    //Parsing the payload and breaking it down
-    const payload = draft.data.message.payload;
-    const headers = payload.headers || [];
-    const subject = headers.find((h) => h.name === "Subject")?.value || "";
-    const htmlBody = extractHtmlOrPlainText(payload);
-
-    return res.status(200).json({
-      draftExists: true,
-      subject: subject,
-      body: htmlBody,
-    });
-  } catch (error) {
-    if (error.response?.data?.error?.code === 401) {
-      return res.status(200).json({ draftExists: false });
-    }
-
-    return res.status(500).json({ draftExists: false });
-  }
-});
-
-app.delete(
-  "/gmail/delete-reply-draft/:userId/:professorId",
-  async (req, res) => {
-    const { userId, professorId } = req.params;
-    try {
       const { error: draftDeleteError } = await supabase
         .from("Emails")
         .delete()
-        .eq("user_id", userId)
-        .eq("professor_id", professorId)
-        .eq("type", "Reply")
-        .eq("sent", false)
+        .eq("draft_id", draftId)
         .single();
 
       if (draftDeleteError) {
@@ -1122,7 +941,7 @@ app.delete(
 app.put(
   "/gmail/update-follow-up-draft/:userId/:professorId/:threadId",
   async (req, res) => {
-    const { userId, professorId } = req.params;
+    const { userId, professorId, threadId } = req.params;
     const { to, fromName, fromEmail, subject, body } = req.body;
 
     const { data: draftData, error: draftFetchError } = await supabase
@@ -1130,9 +949,11 @@ app.put(
       .select("draft_id")
       .eq("user_id", userId)
       .eq("professor_id", professorId)
-      .eq("type", "Reply")
+      .eq("type", "FollowUp")
       .eq("sent", false)
       .single();
+
+    console.log(draftData);
 
     if (!draftData || draftFetchError || !draftData.draft_id) {
       return res.status(401).json({ updated: false });
@@ -1152,20 +973,39 @@ app.put(
       access_token: tokenData.gmail_auth_token,
       refresh_token: tokenData.gmail_refresh_token,
     });
-
-    const raw = makeBody(to, fromName, fromEmail, subject, body);
     try {
       await oauth2Client.getAccessToken();
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const thread = await gmail.users.threads.get({
+        userId: "me",
+        id: threadId,
+      });
+
+      const messages = thread.data.messages;
+      const lastMessage = messages[messages.length - 1];
+
+      const messageIdHeader = lastMessage.payload.headers.find(
+        (h) => h.name === "Message-ID"
+      );
+      const inReplyTo = messageIdHeader?.value;
+      const raw = makeReplyBody(
+        to,
+        fromName,
+        fromEmail,
+        subject,
+        body,
+        inReplyTo
+      );
 
       const draft = await gmail.users.drafts.update({
         userId: "me",
         id: draftData.draft_id,
-        requestBody: { message: { raw } },
+        requestBody: { message: { raw, threadId } },
       });
 
       return res.status(200).json({ updated: true });
     } catch (err) {
+      console.log(err);
       return res.status(500).json({ updated: false });
     }
   }
@@ -1597,7 +1437,7 @@ app.get("/gmail/get-status/:userId/:professorId", async (req, res) => {
     const { data: messageData, error: messageDataError } = await supabase
       .from("Completed")
       .select("status")
-      .eq("user_id", userId )
+      .eq("user_id", userId)
       .eq("professor_id", professorId)
       .single();
 
@@ -1638,14 +1478,11 @@ app.get("/gmail/get-email-chain/:userId", async (req, res) => {
     .select("professor_id")
     .eq("user_id", userId);
 
-
   if (completedFetchError || !completedData?.length) {
     return res
       .status(401)
       .json({ error: "Error fetching completed professors" });
   }
-
-  
 
   const completedProfessorIds = completedData.map((row) => row.professor_id);
 
@@ -1660,15 +1497,13 @@ app.get("/gmail/get-email-chain/:userId", async (req, res) => {
     return res.status(401).json({ error: "Token fetch error" });
   }
 
-
-
   const { data: threadData, error: threadFetchError } = await supabase
     .from("Emails")
     .select("thread_id, professor_id")
     .eq("user_id", userId)
     .eq("type", "first")
     .in("professor_id", completedProfessorIds);
- 
+
   if (threadFetchError) {
     return res.status(401).json({ error: "Thread fetch error" });
   }
@@ -1709,12 +1544,12 @@ app.get("/gmail/get-email-chain/:userId", async (req, res) => {
         id: thread_id,
       });
 
-      console.log(thread?.data?.messages[0])
+      console.log(thread?.data?.messages[0]);
       const headers = thread?.data?.messages[0]?.payload?.headers || [];
       const subject = headers.find((h) => h.name === "Subject")?.value || "";
       const date = headers.find((h) => h.name === "Date")?.value || "";
       //const body = decodeBody(thread.data.messages[0]?.payload?.body?.data || "") || "";
-      const body = thread?.data?.messages[0].snippet
+      const body = thread?.data?.messages[0].snippet;
 
       const threadObject = {
         userName: `${tokenData.student_firstname} ${tokenData.student_lastname}`,
@@ -1751,7 +1586,6 @@ app.get("/gmail/get-full-email-chain/:userId/:threadId", async (req, res) => {
     .single();
 
   if (tokenFetchError || !tokenData) {
-    console.error("❌ Token fetch error:", tokenFetchError);
     return res.status(401).json({ error: "Token fetch error" });
   }
 
@@ -1771,8 +1605,6 @@ app.get("/gmail/get-full-email-chain/:userId/:threadId", async (req, res) => {
 
     const messages = threadData?.data?.messages || [];
     const messageArray = [];
-
-    // Step 4: Loop through each message
     for (const message of messages) {
       const labels = message.labelIds || [];
 
@@ -2664,7 +2496,7 @@ app.get("/kanban/get-saved/:userId", async (req, res) => {
 
 app.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
   const { userId, professorId } = req.params;
-  
+
   const {
     name,
     email,
@@ -2677,7 +2509,7 @@ app.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
     school,
     comments,
   } = req.body;
-  console.log(email)
+  console.log(email);
   try {
     const { error: savedInsertionError } = await supabase
       .from("Saved")
