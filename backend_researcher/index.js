@@ -720,6 +720,8 @@ app.post(
         requestBody: { message: { raw, threadId } },
       });
 
+      console.log(draft)
+
       const { error: insertionError } = await supabase.from("Emails").insert([
         {
           user_id: userId,
@@ -746,7 +748,7 @@ app.post(
   "/gmail/send-follow-up/:userId/:draftId/:trackingId",
   async (req, res) => {``
     const { userId, draftId, trackingId } = req.params;
-
+    console.log(draftId)
     try {
       const { data: tokenData, error: tokenFetchError } = await supabase
         .from("User_Profiles")
@@ -824,7 +826,6 @@ app.get("/gmail/resume-follow-up-draft/:userId/:professorId", async (req, res) =
     return res.status(200).json({ draftExists: false });
   }
 
-  // Step 2: Get user Gmail tokens from Supabase
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
@@ -846,7 +847,6 @@ app.get("/gmail/resume-follow-up-draft/:userId/:professorId", async (req, res) =
     return res.status(404).json({});
   }
 
-  // Step 3: Set tokens on OAuth client
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
     refresh_token: tokenData.gmail_refresh_token,
@@ -976,10 +976,13 @@ app.put(
     try {
       await oauth2Client.getAccessToken();
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
       const thread = await gmail.users.threads.get({
         userId: "me",
         id: threadId,
       });
+
+      console.log(thread)
 
       const messages = thread.data.messages;
       const lastMessage = messages[messages.length - 1];
@@ -1002,6 +1005,8 @@ app.put(
         id: draftData.draft_id,
         requestBody: { message: { raw, threadId } },
       });
+
+      console.log(draft)
 
       return res.status(200).json({ updated: true });
     } catch (err) {
