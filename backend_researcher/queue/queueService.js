@@ -59,6 +59,8 @@ function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
     .replace(/=+$/, "");
 }
 
+//Draft Generation
+
 export async function generateDraftFromSnippetEmail({
   userId,
   professorId,
@@ -144,6 +146,8 @@ export async function generateDraftFromSnippetEmail({
     return { message: "Failed to create draft" };
   }
 }
+
+//Sending Function
 
 export async function sendSnippetEmail({ userId, userEmail, userName, body }) {
   const { data: tokenData, error: tokenFetchError } = await supabase
@@ -261,4 +265,8 @@ export async function sendSnippetEmail({ userId, userEmail, userName, body }) {
   });
 
   return { message: "Successfully Sent!" };
+}
+
+export async function scheduleFollowUpEmail({userId, userEmail, userName, body}) {
+  
 }

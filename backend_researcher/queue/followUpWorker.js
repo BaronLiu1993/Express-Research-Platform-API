@@ -2,14 +2,12 @@ import { Worker } from "bullmq";
 import { sendSnippetEmail } from "./queueService.js";
 import { Connection } from "../redis/redis.js";
 
-export const sendWorker = new Worker(
-    'send-email',
+export const followUpWorker = new Worker(
+    'follow-up-email',
     async (job) => {
       const { userId, userEmail, userName, body } = job.data;
       try {
-        console.log(`Processing email job ${job.id} for professor ${body.professorId}`);
         const result = await sendSnippetEmail({ userId, userEmail, userName, body });
-        console.log(`Email Sent Succesfully for professor ${body.professorId}`);
         return result;
       } catch (error) {
         console.error(`Failed to send email for job ${job.id}:`, error);
