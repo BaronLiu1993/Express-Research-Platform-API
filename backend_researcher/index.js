@@ -46,7 +46,7 @@ app.use("/snippets", snippetsRouter);
 app.use("/variables", variablesRouter);
 app.use("/draft", draftRouter);
 app.use("/inbox", inboxRouter);
-app.use("/engagement", engagementRouter)
+app.use("/engagement", engagementRouter);
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);

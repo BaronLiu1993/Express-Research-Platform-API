@@ -21,7 +21,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-router.get("/gmail/get-engagement/:threadId/:messageId", async (req, res) => {
+router.get("/get-engagement/:threadId/:messageId", async (req, res) => {
   const { threadId, messageId } = req.params;
   try {
     const { data: messageData, error: messageDataError } = await supabase
@@ -43,7 +43,7 @@ router.get("/gmail/get-engagement/:threadId/:messageId", async (req, res) => {
   }
 });
 
-router.get("/gmail/get-seen/:threadId/:messageId", async (req, res) => {
+router.get("/get-seen/:threadId/:messageId", async (req, res) => {
   const { threadId, messageId } = req.params;
   try {
     const { data: messageData, error: messageDataError } = await supabase
@@ -66,7 +66,7 @@ router.get("/gmail/get-seen/:threadId/:messageId", async (req, res) => {
   }
 });
 
-router.get("/gmail/get-status/:userId/:professorId", async (req, res) => {
+router.get("/get-status/:userId/:professorId", async (req, res) => {
   const { userId, professorId } = req.params;
   try {
     const { data: messageData, error: messageDataError } = await supabase
@@ -86,7 +86,7 @@ router.get("/gmail/get-status/:userId/:professorId", async (req, res) => {
   }
 });
 
-router.put("/gmail/update-status/:threadId/", async (req, res) => {
+router.put("/update-status/:threadId/", async (req, res) => {
   const { threadId } = req.params;
   const { value } = req.body;
   try {
@@ -106,77 +106,84 @@ router.put("/gmail/update-status/:threadId/", async (req, res) => {
 });
 
 //Get the Base Emails for Display
-router.get(
-  "/gmail/get-full-email-chain/:userId/:threadId",
-  async (req, res) => {
-    const { userId, threadId } = req.params;
-    const { data: tokenData, error: tokenFetchError } = await supabase
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
+router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
+  const { userId, threadId } = req.params;
 
-    if (tokenFetchError || !tokenData) {
-      return res.status(401).json({ error: "Token fetch error" });
-    }
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
+  const { data: tokenData, error: tokenFetchError } = await supabase
+    .from("User_Profiles")
+    .select("gmail_auth_token, gmail_refresh_token")
+    .eq("user_id", userId)
+    .single();
+
+  if (tokenFetchError || !tokenData) {
+    return res.status(401).json({ error: "Token fetch error" });
+  }
+
+
+  oauth2Client.setCredentials({
+    access_token: tokenData.gmail_auth_token,
+    refresh_token: tokenData.gmail_refresh_token,
+  });
+
+  try {
+    await oauth2Client.getAccessToken();
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+    const threadData = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
     });
-    try {
-      await oauth2Client.getAccessToken();
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const threadData = await gmail.users.threads.get({
+
+    const messageArray = [];
+    const messages = threadData?.data?.messages || [];
+    const messagesLength = messages.length;
+
+    for (let i = 0; i < messagesLength; i++) {
+      const message = threadData.data.messages[i];
+      const labels = message.labelIds || [];
+
+      const messageData = await gmail.users.messages.get({
         userId: "me",
-        id: threadId,
+        id: message.id,
+        format: "raw",
       });
 
-      const messageArray = [];
-      const messages = threadData?.data?.messages || [];
-      const messagesLength = messages.length;
+      const raw = messageData.data.raw;
+      const response = await simpleParser(decodeBody(raw));
+      const email = new EmailReplyParser().read(response.text);
+      const body = email.getVisibleText();
 
-      for (let i = 0; i < messagesLength; i++) {
-        const message = threadData.data.messages[i];
-        const labels = messages[i].labelIds || [];
-        const messageData = await gmail.users.messages.get({
-          userId: "me",
-          id: message.id,
-          format: "raw",
-        });
+      const toObj = response.to?.value || [];
+      const fromObj = response.from?.value || [];
+      const to = toObj[0] || {};
+      const from = fromObj[0] || {};
+      const subject = response.subject;
+      const date = response.date;
 
-        const response = await simpleParser(decodeBody(messageData.data.raw));
-        const email = new EmailReplyParser().read(response.text);
-        const body = email.getVisibleText();
-        const toObj = response.to.value;
-        const to = toObj[0];
-        const fromObj = response.from.value;
-        const from = fromObj[0];
-        const subject = response.subject;
-        const date = response.date;
+      const messageObj = {
+        labels,
+        to,
+        from,
+        subject,
+        body,
+        date,
+      };
 
-        const messageObj = {
-          labels,
-          to,
-          from,
-          subject,
-          body,
-          date,
-        };
-
-        messageArray.push(messageObj);
-      }
-
-      return res.status(200).json({ messageArray });
-    } catch (err) {
-      return res.status(500).json({ message: "Internal Server Error" });
+      messageArray.push(messageObj);
     }
+
+    return res.status(200).json({ messageArray });
+  } catch (err) {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-);
+});
+
 
 //Get the Full Individual Email Chains
-router.get("/gmail/get-email-chain/:userId", async (req, res) => {
+router.get("/get-email-chain/:userId", async (req, res) => {
   const { userId } = req.params;
-
+  console.log(userId)
   const { data: completedData, error: completedFetchError } = await supabase
     .from("Completed")
     .select("professor_id")
@@ -206,7 +213,7 @@ router.get("/gmail/get-email-chain/:userId", async (req, res) => {
     .from("Emails")
     .select("thread_id, professor_id")
     .eq("user_id", userId)
-    .eq("type", "First")
+    .eq("type", "first")
     .in("professor_id", completedProfessorIds);
 
   if (threadFetchError || !threadData?.length) {
@@ -272,7 +279,7 @@ router.get("/gmail/get-email-chain/:userId", async (req, res) => {
 
       threadArray.push(threadObject);
     }
-
+    console.log(threadArray)
     return res.status(200).json({ threadArray });
   } catch (err) {
     console.error("Gmail fetch error:", err);
@@ -280,4 +287,4 @@ router.get("/gmail/get-email-chain/:userId", async (req, res) => {
   }
 });
 
-export default router
+export default router;
