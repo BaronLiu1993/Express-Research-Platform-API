@@ -21,6 +21,90 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
+router.get("/gmail/get-engagement/:threadId/:messageId", async (req, res) => {
+  const { threadId, messageId } = req.params;
+  try {
+    const { data: messageData, error: messageDataError } = await supabase
+      .from("Messages")
+      .select("opened, opened_at")
+      .eq("thread_id", threadId)
+      .eq("message_id", messageId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ opened: false, opened_at: "Not Opened" });
+    }
+
+    return res
+      .status(200)
+      .json({ opened: messageData.opened, opened_at: messageData.opened_at });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.get("/gmail/get-seen/:threadId/:messageId", async (req, res) => {
+  const { threadId, messageId } = req.params;
+  try {
+    const { data: messageData, error: messageDataError } = await supabase
+      .from("Messages")
+      .select("opened_email, opened_email_at")
+      .eq("thread_id", threadId)
+      .eq("message_id", messageId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ opened: false, opened_at: "Not Opened" });
+    }
+
+    return res.status(200).json({
+      opened_email: messageData.opened_email,
+      opened_email_at: messageData.opened_email_at,
+    });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.get("/gmail/get-status/:userId/:professorId", async (req, res) => {
+  const { userId, professorId } = req.params;
+  try {
+    const { data: messageData, error: messageDataError } = await supabase
+      .from("Completed")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("professor_id", professorId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
+    }
+    const data = messageData.status;
+    return res.status(200).json({ data });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.put("/gmail/update-status/:threadId/", async (req, res) => {
+  const { threadId } = req.params;
+  const { value } = req.body;
+  try {
+    const { error: messageDataError } = await supabase
+      .from("Emails")
+      .update({ status: value })
+      .eq("thread_id", threadId)
+      .single();
+
+    if (messageDataError) {
+      return res.status(400).json({ message: "Failed to Insert" });
+    }
+    return res.status(200).json({ message: "Successfully Inserted" });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 //Get the Base Emails for Display
 router.get(
   "/gmail/get-full-email-chain/:userId/:threadId",

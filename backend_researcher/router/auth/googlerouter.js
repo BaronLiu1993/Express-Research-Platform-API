@@ -1,5 +1,5 @@
 //Supabase Client Import
-import { supabase } from "../../supabase/supabase";
+import { supabase } from "../../supabase/supabase.js";
 
 //External Library Imports
 import { google } from "googleapis";
@@ -24,7 +24,6 @@ const scopes = [
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.readonly",
 ];
-
 
 router.get("/auth/gmail-data/:userId", (req, res) => {
   const userId = req.params.userId;
@@ -64,3 +63,5 @@ router.get("/auth/oauth2callback", async (req, res) => {
     res.status(500).send({ message: "Authentication failed" });
   }
 });
+
+export default router

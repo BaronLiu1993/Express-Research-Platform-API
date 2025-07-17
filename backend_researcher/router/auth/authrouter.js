@@ -1,22 +1,11 @@
-/*
-This is the Authentication Flow for Register and Login Flow
-*/
-
-
-
-//Supabase Client Import
 import { supabase } from "../../supabase/supabase";
-
-//External Library Imports
 import express from "express";
-
-//Service Imports for Logic
 import { generateEmbeddings } from "../../services/auth/authservices";
 
 const router = express.Router();
 
 //Registration Method
-router.post("/auth/register", async (req, res) => {
+router.post("/register", async (req, res) => {
   const {
     student_email,
     student_password,
@@ -79,7 +68,7 @@ router.post("/auth/register", async (req, res) => {
 });
 
 //Login Method
-router.post("/auth/login", async (req, res) => {
+router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const { data: authData, error: authError } =
@@ -102,7 +91,7 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
-app.get("/auth/get-user", async (req, res) => {
+app.get("/get-user", async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -140,7 +129,7 @@ app.get("/auth/get-user", async (req, res) => {
 });
 
 //Get Just ID and Email
-router.get("/auth/get-user-id-email", async (req, res) => {
+router.get("/get-user-id-email", async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -181,7 +170,7 @@ router.get("/auth/get-user-id-email", async (req, res) => {
 });
 
 //Get Enough Info for Sidebar
-router.get("/auth/get-user-sidebar-info", async (req, res) => {
+router.get("/get-user-sidebar-info", async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -221,7 +210,7 @@ router.get("/auth/get-user-sidebar-info", async (req, res) => {
   }
 });
 
-router.get("/auth/get-professor-ids/:userId", async (req, res) => {
+router.get("/get-professor-ids/:userId", async (req, res) => {
   const userId = req.params.userId;
   try {
     const { data: professorArrayData, error: professorArrayError } =
@@ -245,7 +234,7 @@ router.get("/auth/get-professor-ids/:userId", async (req, res) => {
   }
 });
 
-router.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
+router.get("/get-applied-professor-ids/:userId", async (req, res) => {
   const userId = req.params.userId;
   try {
     const { data: professorArrayData, error: professorArrayError } =
@@ -268,3 +257,30 @@ router.get("/auth/get-applied-professor-ids/:userId", async (req, res) => {
     });
   }
 });
+
+router.post("/refresh-jwt", async (req, res) => {
+  const { refreshToken } = req.body;
+  try {
+  } catch {}
+});
+
+router.post("/verify-code", async (req, res) => {
+  const { email, code } = req.body;
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token: code,
+      type: "email",
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
+    return res.status(200).json({ session: data.session, user: data.user });
+  } catch (err) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+export default router

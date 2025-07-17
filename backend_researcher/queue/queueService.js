@@ -356,21 +356,13 @@ export async function createFollowUpEmail({
 
     const messages = thread.data.messages;
     const lastMessage = messages[messages.length - 1];
-
-    console.log(`📩 Fetched thread with ${messages.length} messages`);
-
     const messageIdHeader = lastMessage.payload.headers.find(
       (h) => h.name === "Message-ID"
     );
     const inReplyTo = messageIdHeader?.value;
-
     const trackingId = uuidv4();
-
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const message = Mustache.render(snippetBody, dynamicFields);
-
-    console.log("🧠 Rendered mustache subject and message");
-
     const raw = makeReplyBody(
       to,
       fromName,
@@ -380,8 +372,6 @@ export async function createFollowUpEmail({
       inReplyTo
     );
 
-    console.log("📦 Raw MIME email body generated");
-
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw, threadId } },
@@ -390,11 +380,9 @@ export async function createFollowUpEmail({
     const draftId = draft.data?.id;
 
     if (!draftId) {
-      console.error("❌ Failed to create Gmail draft");
       return;
     }
 
-    console.log(`✅ Draft created with ID: ${draftId}`);
 
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
@@ -407,12 +395,8 @@ export async function createFollowUpEmail({
     ]);
 
     if (insertionError) {
-      console.error("❌ Error inserting into Emails table:", insertionError);
       return;
     }
-
-    console.log("🗃️ Email metadata saved to Supabase");
-
     // Queue follow-up job
     await followUpQueue.add(
       "follow-up-email",
@@ -433,7 +417,6 @@ export async function createFollowUpEmail({
       }
     );
 
-    console.log("📬 Job added to queue with delay:", delayMs);
     return trackingId;
   } catch (err) {
     console.error("🔥 Error in createFollowUpEmail:", err);
