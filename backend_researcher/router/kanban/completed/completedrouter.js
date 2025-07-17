@@ -1,12 +1,10 @@
 import { supabase } from "../../../supabase/supabase";
-
-//External Imports
 import express from "express";
 
 const router = express.Router();
 
 //Get Method
-app.get("/kanban/get-completed/:userId", async (req, res) => {
+router.get("/kanban/get-completed/:userId", async (req, res) => {
     const { userId } = req.params;
     try {
       const { data: completedData, error: completedFetchError } = await supabase
@@ -28,7 +26,7 @@ app.get("/kanban/get-completed/:userId", async (req, res) => {
 //Update Method -> Move to FollowUp Section is a CRON Job
 
 //Delete Method
-app.delete("/kanban/delete-completed/:userId/:professorId", async (req, res) => {
+router.delete("/kanban/delete-completed/:userId/:professorId", async (req, res) => {
     const { userId, professorId } = req.params;
     try {
       const { error: deletionError } = await supabase
@@ -110,3 +108,5 @@ router.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+export default router

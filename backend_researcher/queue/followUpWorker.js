@@ -22,9 +22,8 @@ export const followUpWorker = new Worker(
   }
 );
 
-// Optional: more detailed lifecycle logging
 followUpWorker.on("completed", (job) => {
-  console.log(`🎉 [Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`);
+  console.log(`[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`);
 });
 
 followUpWorker.on("failed", (job, err) => {
@@ -32,17 +31,17 @@ followUpWorker.on("failed", (job, err) => {
 });
 
 followUpWorker.on("active", (job) => {
-  console.log(`🔄 [Worker] Job is active: trackingId=${job.data.trackingId}`);
+  console.log(`[Worker] Job is active: trackingId=${job.data.trackingId}`);
 });
 
 followUpWorker.on("progress", (job, progress) => {
-  console.log(`📈 [Worker] Job progress for trackingId=${job.data.trackingId}:`, progress);
+  console.log(`[Worker] Job progress for trackingId=${job.data.trackingId}:`, progress);
 });
 
 followUpWorker.on("stalled", (jobId) => {
-  console.warn(`⚠️ [Worker] Job stalled: jobId=${jobId}`);
+  console.warn(`[Worker] Job stalled: jobId=${jobId}`);
 });
 
 followUpWorker.on("error", (err) => {
-  console.error("💥 [Worker] Worker-level error:", err);
+  console.error("[Worker] Worker-level error:", err);
 });
