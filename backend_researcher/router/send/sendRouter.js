@@ -1,11 +1,11 @@
-import draftQueue from "../../queue/draftQueue";
-import sendQueue from "../../queue/sendQueue";
-import { createFollowUpEmail } from "../../queue/queueService";
+import draftQueue from "../../queue/draftQueue.js";
+import sendQueue from "../../queue/sendQueue.js";
+import { createFollowUpEmail } from "../../queue/queueService.js";
 import express from "express";
 
 const router = express.Router();
 
-router.post("/gmail/snippet-create-draft", async (req, res) => {
+router.post("/snippet-create-draft", async (req, res) => {
   const { userId, professorData, baseBody } = req.body;
   console.log(professorData);
   try {
@@ -32,9 +32,10 @@ router.post("/gmail/snippet-create-draft", async (req, res) => {
   }
 });
 
-app.post("/gmail/mass-send", async (req, res) => {
+router.post("/mass-send", async (req, res) => {
   const { userId, userEmail, userName, professorData } = req.body;
   //Array of professorIdArray
+  console.log("fired")
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
@@ -59,7 +60,7 @@ app.post("/gmail/mass-send", async (req, res) => {
 });
 
 //Create Follow Up
-router.post("/gmail/queue-follow-ups", async (req, res) => {
+router.post("/queue-follow-ups", async (req, res) => {
   const {
     userId,
     professorData, // [{ professorId, professorEmail, threadId, dynamicFields }]

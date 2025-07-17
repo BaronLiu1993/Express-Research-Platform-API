@@ -1,5 +1,17 @@
-import { supabase } from "../../supabase/supabase";
+import { supabase } from "../../supabase/supabase.js";
 import express from "express";
+
+//External Library Imports
+import OpenAI from "openai";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+//Initialise OpenAI Client
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const OPEN_AI = new OpenAI({
+  apiKey: OPENAI_KEY,
+});
 
 const router = express.Router();
 
@@ -119,6 +131,7 @@ router.get("/taishan", async (req, res) => {
 
 router.get("/match-professors", async (req, res) => {
   const { userId } = req.query;
+  console.log(userId)
   const match_count = 10;
   const match_threshold = 0.2;
 

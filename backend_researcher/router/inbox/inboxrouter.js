@@ -1,5 +1,5 @@
 //Supabase Client Import
-import { supabase } from "../../supabase/supabase";
+import { supabase } from "../../supabase/supabase.js";
 
 //External Library Imports
 import { google } from "googleapis";
@@ -9,7 +9,7 @@ import EmailReplyParser from "email-reply-parser";
 import { simpleParser } from "mailparser";
 
 //Google Service Service Layer
-import { decodeBody } from "../../services/auth/googleservices";
+import { decodeBody } from "../../services/googleServices.js";
 
 dotenv.config();
 
@@ -279,3 +279,5 @@ router.get("/gmail/get-email-chain/:userId", async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch Gmail threads." });
   }
 });
+
+export default router

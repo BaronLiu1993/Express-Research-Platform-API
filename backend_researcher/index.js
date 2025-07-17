@@ -6,7 +6,6 @@ import dotenv from "dotenv";
 
 //Router
 import authRouter from "./router/auth/authRouter.js";
-import googleRouter from "./router/auth/googleRouter.js";
 import completedRouter from "./router/kanban/completed/completedRouter.js";
 import savedRouter from "./router/kanban/saved/savedRouter.js";
 import inProgressRouter from "./router/kanban/inProgress/inProgressRouter.js";
@@ -16,13 +15,13 @@ import snippetsRouter from "./router/snippets/snippetsRouter.js";
 import variablesRouter from "./router/variables/variablesRouter.js";
 import inboxRouter from "./router/inbox/inboxRouter.js";
 import draftRouter from "./router/inbox/draftRouter.js";
+import engagementRouter from "./router/engagement/engagementRouter.js"
 
 import "./queue/sendWorker.js";
 import "./queue/draftWorker.js";
 import "./queue/followUpWorker.js";
 
 dotenv.config();
-
 const app = express();
 const port = 8080;
 
@@ -33,12 +32,11 @@ app.use(
   })
 );
 
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 app.use("/auth", authRouter);
-app.use("/google/auth", googleRouter);
 app.use("/completed", completedRouter);
 app.use("/saved", savedRouter);
 app.use("/inprogress", inProgressRouter);
@@ -48,6 +46,7 @@ app.use("/snippets", snippetsRouter);
 app.use("/variables", variablesRouter);
 app.use("/draft", draftRouter);
 app.use("/inbox", inboxRouter);
+app.use("/engagement", engagementRouter)
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);

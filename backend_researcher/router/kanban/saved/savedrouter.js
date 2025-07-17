@@ -1,5 +1,5 @@
 import express from "express";
-import { supabase } from "../../../supabase/supabase";
+import { supabase } from "../../../supabase/supabase.js";
 
 const router = express.Router();
 
@@ -11,11 +11,9 @@ router.get("/kanban/get-saved/:userId", async (req, res) => {
       .select("*")
       .eq("user_id", userId)
       .limit(10);
-
     if (savedFetchError) {
       return res.status(400).json({ message: "Unable to Fetch Data" });
     }
-
     return res.status(200).json({ data: savedData });
   } catch {
     return res.status(500).json({ message: "Internal Service Error" });
@@ -24,7 +22,6 @@ router.get("/kanban/get-saved/:userId", async (req, res) => {
 
 router.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
   const { userId, professorId } = req.params;
-
   const {
     name,
     email,
@@ -37,7 +34,6 @@ router.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
     school,
     comments,
   } = req.body;
-  console.log(email);
   try {
     const { error: savedInsertionError } = await supabase
       .from("Saved")
