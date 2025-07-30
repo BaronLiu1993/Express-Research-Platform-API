@@ -3,6 +3,24 @@ import { supabase } from "../../../supabase/supabase.js";
 
 const router = express.Router();
 
+router.get("/repository/get-all-savedId/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: professorIdData, error: professorIdFetchError } =
+      await supabase.from("Saved").select("professor_id").eq("user_id", userId);
+    if (professorIdFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
+    }
+
+    
+    console.log(professorIdData)
+    const professorIds = professorIdData.map( item => item.professor_id)
+    return res.status(200).json({ data: professorIds });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 router.get("/kanban/get-saved/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
@@ -58,33 +76,6 @@ router.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
         .json({ message: "Could not fetch application data." });
     }
 
-    const { data: profileData, error: profileFetchError } = await supabase
-      .from("User_Profiles")
-      .select("saved_professors")
-      .eq("user_id", userId)
-      .single();
-
-    if (profileFetchError) {
-      return res.status(400).json({ message: "Could not fetch profile data." });
-    }
-
-    const currentSaved = profileData?.saved_professors || [];
-    const alreadySaved = currentSaved.includes(professorId);
-
-    if (!alreadySaved) {
-      const updatedSaved = [...currentSaved, professorId];
-      const { error: savedUpdateError } = await supabase
-        .from("User_Profiles")
-        .update({ saved_professors: updatedSaved })
-        .eq("user_id", userId);
-
-      if (savedUpdateError) {
-        return res
-          .status(400)
-          .json({ message: "Could not update saved professors." });
-      }
-    }
-
     return res.status(200).json({ message: "Professor saved successfully." });
   } catch (err) {
     return res.status(500).json({ message: "An unexpected error occurred." });
@@ -112,32 +103,6 @@ router.delete("/kanban/remove-saved/:userId/:professorId", async (req, res) => {
         .json({ message: "Could not delete application data." });
     }
 
-    const { data: savedData, error: savedDataFetchError } = await supabase
-      .from("User_Profiles")
-      .select("saved_professors")
-      .eq("user_id", userId)
-      .single();
-
-    if (savedDataFetchError) {
-      return res.status(400).json({ message: "Failed to Fetch Data" });
-    }
-    const prevSaved = savedData.saved_professors;
-    const newSaved = prevSaved.filter(
-      (prof) => String(prof) !== String(professorId)
-    );
-
-    if (prevSaved.length !== newSaved.length) {
-      const { error: arrayUpdateError } = await supabase
-        .from("User_Profiles")
-        .update({ saved_professors: newSaved })
-        .eq("user_id", userId);
-      if (arrayUpdateError) {
-        return res
-          .status(400)
-          .json({ message: "Could not update application data." });
-      }
-    }
-
     return res.status(200).json({ message: "Professor removed successfully." });
   } catch (err) {
     console.log(err);
@@ -146,4 +111,4 @@ router.delete("/kanban/remove-saved/:userId/:professorId", async (req, res) => {
   }
 });
 
-export default router
+export default router;

@@ -3,6 +3,23 @@ import express from "express";
 
 const router = express.Router();
 
+router.get("/repository/get-all-appliedId/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: professorIdData, error: professorIdFetchError } =
+      await supabase
+        .from("InProgress")
+        .select("professor_id")
+        .eq("user_id", userId);
+    if (professorIdFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
+    }
+    return res.status(200).json({ data: professorIdData });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 //Get Kanban
 router.get("/kanban/get-in-progress/:userId", async (req, res) => {
   const { userId } = req.params;
@@ -20,6 +37,42 @@ router.get("/kanban/get-in-progress/:userId", async (req, res) => {
     return res.status(200).json({ data: savedData });
   } catch {
     return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
+
+router.get("/fetch/draft/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { data: draftData, error: fetchError } = await supabase
+      .from("Emails")
+      .select("draft_id, professor_id")
+      .eq("user_id", userId);
+
+    let totalDraftData = [];
+    await Promise.all(
+      draftData.map(async (prof) => {
+        const { data: professorData, error: professorFetchError } =
+          await supabase
+            .from("Taishan")
+            .select("name, email")
+            .eq("id", prof.professor_id)
+            .single();
+        totalDraftData.push({
+          draft_id: prof.draft_id,
+          id: prof.professor_id,
+          name: professorData.name,
+          email: professorData.email,
+        });
+      })
+    );
+
+    if (fetchError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
+    }
+    return res.status(200).json({ data: totalDraftData });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -53,7 +106,6 @@ router.post(
 
       let comments = "";
 
-      // Remove from Saved if it exists
       if (savedData?.length > 0) {
         const { error: savedDataDeletionError } = await supabase
           .from("Saved")
@@ -94,58 +146,8 @@ router.post(
           .json({ message: "Failed to update application columns." });
       }
 
-      // Fetch user profile
-      const { data: profileData, error: profileFetchError } = await supabase
-        .from("User_Profiles")
-        .select("applied_professors, saved_professors")
-        .eq("user_id", userId)
-        .single();
-
-      if (profileFetchError) {
-        return res
-          .status(400)
-          .json({ message: "Could not fetch profile data." });
-      }
-
-      const currentSaved = profileData.saved_professors ?? [];
-      const currentApplied = profileData.applied_professors ?? [];
-
-      const alreadySaved = currentSaved.includes(professorId);
-      const newApplied = [...currentApplied, professorId];
-
-      if (alreadySaved) {
-        const newSaved = currentSaved.filter(
-          (prof) => String(prof) !== String(professorId)
-        );
-        const { error: profileIRError } = await supabase
-          .from("User_Profiles")
-          .update({
-            saved_professors: newSaved,
-            applied_professors: newApplied,
-          })
-          .eq("user_id", userId);
-
-        if (profileIRError) {
-          return res
-            .status(400)
-            .json({ message: "Insertion and Removal Error" });
-        }
-      } else {
-        const { error: profileInsertionError } = await supabase
-          .from("User_Profiles")
-          .update({
-            applied_professors: newApplied,
-          })
-          .eq("user_id", userId);
-
-        if (profileInsertionError) {
-          return res
-            .status(400)
-            .json({ message: "Insertion Error for Second Function" });
-        }
-      }
       return res.status(200).json({
-        message: "Professor successfully added to 'In Progress' column.",
+        message: "Professor successfully added to In Progress column.",
       });
     } catch (err) {
       return res.status(500).json({ message: "Internal Server Error" });
@@ -158,44 +160,16 @@ router.delete(
   "/kanban/delete-in-progress/:userId/:professorId",
   async (req, res) => {
     const { userId, professorId } = req.params;
+
     try {
       const { error: deletionError } = await supabase
         .from("InProgress")
         .delete()
         .eq("user_id", userId)
-        .eq("professor_id", professorId);
+        .eq("professor_id", Number(professorId));
 
       if (deletionError) {
         return res.status(400).json({ message: "Failed to delete" });
-      }
-
-      const { data: profileData, error: profileFetchError } = await supabase
-        .from("User_Profiles")
-        .select("applied_professors")
-        .eq("user_id", userId)
-        .single();
-
-      if (profileFetchError) {
-        return res
-          .status(400)
-          .json({ message: "Could not fetch profile data." });
-      }
-
-      const currentApplied = profileData.applied_professors;
-      const newApplied = currentApplied.filter(
-        (prof) => String(prof) !== professorId
-      );
-
-      const { error: profileError } = await supabase
-        .from("User_Profiles")
-        .update({
-          applied_professors: newApplied,
-        })
-        .eq("user_id", userId);
-      if (profileError) {
-        return res
-          .status(400)
-          .json({ message: "Could not fetch profile data." });
       }
 
       return res.status(200).json({ message: "Delete Successful" });
@@ -205,4 +179,4 @@ router.delete(
   }
 );
 
-export default router
+export default router;

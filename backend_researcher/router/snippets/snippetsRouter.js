@@ -50,26 +50,19 @@ router.get("/get-all/:userId", async (req, res) => {
 });
 
 router.post("/sync-fetchable-variables/:userId", async (req, res) => {
-  console.log("🔵 [START] /sync-fetchable-variables");
-  console.log("Headers:", req.headers);
-
   const { variableArray, professorIdArray } = req.body;
-  const { userId } = req.params;
+  console.log(professorIdArray)
   console.log(variableArray)
-  console.log("📦 Raw Body Sizes — variableArray:", variableArray?.length, "professorIdArray:", professorIdArray?.length);
 
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
-    console.warn("⚠️ Invalid input arrays");
     return res.status(400).json({ message: "Invalid input arrays" });
   }
 
   if (variableArray.length === 0 || professorIdArray.length === 0) {
-    console.warn("⚠️ Empty arrays sent");
     return res.status(400).json({ message: "User Sent Nothing" });
   }
 
   const newVariableArray = variableArray.map(removeBracketPlaceholders);
-  console.log(newVariableArray)
   const result = [];
 
   try {
@@ -79,17 +72,15 @@ router.post("/sync-fetchable-variables/:userId", async (req, res) => {
 
       const { data: constantData, error: constantError } = await supabase
         .from("Taishan")
-        .select("id, email")
+        .select("email")
         .eq("id", professorId)
         .single();
 
       if (constantError) {
-        console.error("❌ Supabase constantError:", constantError);
-        throw constantError;
+        return res.status(400).json({message: "Failed to Fetch"})
       }
 
       const filteredFields = newVariableArray.filter((v) => v !== "publications");
-      console.log("🧹 Filtered fields:", filteredFields);
 
       let variableData = {};
       if (filteredFields.length > 0) {
@@ -99,28 +90,12 @@ router.post("/sync-fetchable-variables/:userId", async (req, res) => {
           .eq("id", professorId)
           .single();
 
-        if (variableError) {
-          console.error("❌ Supabase variableError:", variableError);
-          throw variableError;
-        }
         variableData = data || {};
       }
 
       let publicationData;
       if (newVariableArray.includes("publications")) {
-        console.log("📚 Fetching publication data...");
-        const { data, error } = await supabase.rpc("match_publications", {
-          student_id_param: userId,
-          professor_id_param: professorId,
-          match_threshold_param: 0.2,
-          match_count_param: 1,
-        });
-
-        if (error) {
-          console.error("❌ Supabase publication RPC error:", error);
-          throw error;
-        }
-        publicationData = data?.[0]?.title || "";
+        publicationData = ""
       }
 
       const dynamicFields = {};
@@ -132,7 +107,7 @@ router.post("/sync-fetchable-variables/:userId", async (req, res) => {
       }
 
       const resultEntry = {
-        id: constantData.id,
+        id: professorId,
         email: constantData.email,
       };
 
@@ -148,7 +123,6 @@ router.post("/sync-fetchable-variables/:userId", async (req, res) => {
     return res.status(200).json({ result, status: "synced" });
 
   } catch (err) {
-    console.error("🔥 [ERROR] in /sync-fetchable-variables:", err);
     return res.status(500).json({
       message: "Internal Server Error",
       status: "failed",

@@ -1,16 +1,16 @@
 // workers/followUpWorker.js
 import { Worker } from "bullmq";
-import { sendFollowUpEmail } from "./queueService.js";
 import { Connection } from "../redis/redis.js";
+import { generateFollowUpDraftSnippetEmail } from "./queueService.js";
 
 export const followUpWorker = new Worker(
-  "follow-up-email",
+  "follow-up-draft-email",
   async (job) => {
-    const { userId, userEmail, userName, body } = job.data;
+    const { userId, professorId, body } = job.data;
     try {
-      await sendFollowUpEmail({ userId, userEmail, userName, body });
+      await generateFollowUpDraftSnippetEmail({ userId, professorId, body });
     } catch (err) {
-      throw err;
+      throw err; 
     }
   },
   {
@@ -20,27 +20,19 @@ export const followUpWorker = new Worker(
 );
 
 followUpWorker.on("completed", (job) => {
-  console.log(
-    `[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`
-  );
+  console.log(`[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`);
 });
 
 followUpWorker.on("failed", (job, err) => {
-  console.error(
-    `🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`,
-    err.message
-  );
+  console.error(`🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`, err.message);
 });
 
 followUpWorker.on("active", (job) => {
-  console.log(`[Worker] Job is active: trackingId=${job.data.trackingId}`);
+  console.log(`[Worker] Job is active`);
 });
 
 followUpWorker.on("progress", (job, progress) => {
-  console.log(
-    `[Worker] Job progress for trackingId=${job.data.trackingId}:`,
-    progress
-  );
+  console.log(`[Worker] Job progress`, progress);
 });
 
 followUpWorker.on("stalled", (jobId) => {

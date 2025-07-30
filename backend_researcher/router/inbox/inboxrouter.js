@@ -86,29 +86,12 @@ router.get("/get-status/:userId/:professorId", async (req, res) => {
   }
 });
 
-router.put("/update-status/:threadId/", async (req, res) => {
-  const { threadId } = req.params;
-  const { value } = req.body;
-  try {
-    const { error: messageDataError } = await supabase
-      .from("Emails")
-      .update({ status: value })
-      .eq("thread_id", threadId)
-      .single();
-
-    if (messageDataError) {
-      return res.status(400).json({ message: "Failed to Insert" });
-    }
-    return res.status(200).json({ message: "Successfully Inserted" });
-  } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
 
 //Get the Base Emails for Display
 router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
   const { userId, threadId } = req.params;
 
+  // Step 1: Get Gmail tokens
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
@@ -119,62 +102,78 @@ router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
     return res.status(401).json({ error: "Token fetch error" });
   }
 
-
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
     refresh_token: tokenData.gmail_refresh_token,
   });
 
   try {
+    // Refresh token if needed
     await oauth2Client.getAccessToken();
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
+    // Step 2: Get thread
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
     });
 
-    const messageArray = [];
     const messages = threadData?.data?.messages || [];
-    const messagesLength = messages.length;
+    const messageArray = [];
 
-    for (let i = 0; i < messagesLength; i++) {
-      const message = threadData.data.messages[i];
-      const labels = message.labelIds || [];
+    for (let i = 0; i < messages.length; i++) {
+      const message = messages[i];
 
-      const messageData = await gmail.users.messages.get({
-        userId: "me",
-        id: message.id,
-        format: "raw",
-      });
+      if (!message?.id) {
+        console.warn(`Skipping message without ID at index ${i}`);
+        continue;
+      }
 
-      const raw = messageData.data.raw;
-      const response = await simpleParser(decodeBody(raw));
-      const email = new EmailReplyParser().read(response.text);
-      const body = email.getVisibleText();
+      try {
+        const messageData = await gmail.users.messages.get({
+          userId: "me",
+          id: message.id,
+          format: "raw",
+        });
 
-      const toObj = response.to?.value || [];
-      const fromObj = response.from?.value || [];
-      const to = toObj[0] || {};
-      const from = fromObj[0] || {};
-      const subject = response.subject;
-      const date = response.date;
+        const raw = messageData?.data?.raw;
 
-      const messageObj = {
-        labels,
-        to,
-        from,
-        subject,
-        body,
-        date,
-      };
+        if (!raw) {
+          console.warn(`Skipping message ${message.id}: Missing raw content`);
+          continue;
+        }
 
-      messageArray.push(messageObj);
+        const decoded = decodeBody(raw);
+        const parsed = await simpleParser(decoded);
+        const replyParsed = new EmailReplyParser().read(parsed.text || "");
+        const visibleBody = replyParsed.getVisibleText();
+
+        const to = parsed.to?.value?.[0] || {};
+        const from = parsed.from?.value?.[0] || {};
+        const subject = parsed.subject || "(No Subject)";
+        const date = parsed.date || null;
+        const labels = message.labelIds || [];
+
+        const messageObj = {
+          labels,
+          to,
+          from,
+          subject,
+          body: visibleBody,
+          date,
+        };
+
+        messageArray.push(messageObj);
+      } catch (msgErr) {
+        console.warn(`Failed to parse message ${message.id}: ${msgErr.message}`);
+        continue;
+      }
     }
 
     return res.status(200).json({ messageArray });
   } catch (err) {
+    console.error("Thread processing error:", err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });

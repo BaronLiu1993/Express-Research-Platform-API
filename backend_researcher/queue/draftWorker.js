@@ -7,7 +7,6 @@ export const draftWorker = new Worker(
     async (job) => {
       const { userId, professorId, body } = job.data;
       try {
-        console.log(`Processing email job ${job.id} for professor ${professorId}`);
         
         // Call your existing sendSnippetEmail function with correct parameters
         const result = await generateDraftFromSnippetEmail({ userId, professorId, body });

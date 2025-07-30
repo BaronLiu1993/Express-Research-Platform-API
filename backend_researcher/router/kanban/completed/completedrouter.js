@@ -5,28 +5,29 @@ const router = express.Router();
 
 //Get Method
 router.get("/kanban/get-completed/:userId", async (req, res) => {
-    const { userId } = req.params;
-    try {
-      const { data: completedData, error: completedFetchError } = await supabase
-        .from("Completed")
-        .select("*")
-        .eq("user_id", userId)
-        .limit(10);
-  
-      if (completedFetchError) {
-        return res.status(400).json({ message: "Unable to Fetch Data" });
-      }
-  
-      return res.status(200).json({ data: completedData });
-    } catch {
-      return res.status(500).json({ message: "Internal Service Error" });
+  const { userId } = req.params;
+  try {
+    const { data: completedData, error: completedFetchError } = await supabase
+      .from("Completed")
+      .select("*")
+      .eq("user_id", userId)
+      .limit(10);
+
+    if (completedFetchError) {
+      return res.status(400).json({ message: "Unable to Fetch Data" });
     }
-  });
+    return res.status(200).json({ data: completedData });
+  } catch {
+    return res.status(500).json({ message: "Internal Service Error" });
+  }
+});
 
 //Update Method -> Move to FollowUp Section is a CRON Job
 
 //Delete Method
-router.delete("/kanban/delete-completed/:userId/:professorId", async (req, res) => {
+router.delete(
+  "/kanban/delete-completed/:userId/:professorId",
+  async (req, res) => {
     const { userId, professorId } = req.params;
     try {
       const { error: deletionError } = await supabase
@@ -109,4 +110,4 @@ router.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
   }
 });
 
-export default router
+export default router;

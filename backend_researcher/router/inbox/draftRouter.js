@@ -213,7 +213,6 @@ router.get("/resume-follow-up-draft/:userId/:professorId", async (req, res) => {
       body: htmlBody,
     });
   } catch (error) {
-
     if (error.response?.data?.error?.code === 401) {
       return res.status(200).json({ draftExists: false });
     }
@@ -246,7 +245,7 @@ router.delete("/delete-follow-up-draft/:userId/:draftId", async (req, res) => {
   });
 
   try {
-    const accessToken = await oauth2Client.getAccessToken();
+    await oauth2Client.getAccessToken();
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
@@ -266,12 +265,10 @@ router.delete("/delete-follow-up-draft/:userId/:draftId", async (req, res) => {
     }
 
     return res.status(200).json({ message: "Draft deleted successfully" });
-
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Errors" });
   }
 });
-
 
 router.put(
   "/update-follow-up-draft/:userId/:professorId/:threadId",
@@ -410,19 +407,10 @@ router.post("/create-draft/:userId/:professorId", async (req, res) => {
 
 //Require someone to delete the workflow first and then restart again
 
-router.get("/resume-draft/:userId/:professorId", async (req, res) => {
+router.get("/resume-draft/:draftId/:userId", async (req, res) => {
   //Params to get the draft data
-  const { userId, professorId } = req.params;
-
-  //Draft Data
-  const { data: draftData, error: draftFetchError } = await supabase
-    .from("Emails")
-    .select("draft_id")
-    .eq("user_id", userId)
-    .eq("professor_id", professorId)
-    .single();
-
-  if (draftFetchError || !draftData || !draftData.draft_id) {
+  const { userId, draftId } = req.params;
+  if (!draftId) {
     return res.status(200).json({
       draftExists: false,
     });
@@ -455,13 +443,14 @@ router.get("/resume-draft/:userId/:professorId", async (req, res) => {
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
-      id: draftData.draft_id,
+      id: draftId,
     });
 
     //Parsing the payload and breaking it down
     const payload = draft.data.message.payload;
     const headers = payload.headers || [];
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    console.log(subject)
     const htmlBody = extractHtmlOrPlainText(payload);
 
     return res.status(200).json({
@@ -478,17 +467,11 @@ router.get("/resume-draft/:userId/:professorId", async (req, res) => {
   }
 });
 
-router.put("/update-draft/:userId/:professorId", async (req, res) => {
-  const { userId, professorId } = req.params;
+router.put("/update-draft/:draftId/:userId", async (req, res) => {
+  const { draftId, userId } = req.params;
   const { to, fromName, fromEmail, subject, body } = req.body;
-  const { data: draftData, error: draftFetchError } = await supabase
-    .from("Emails")
-    .select("draft_id")
-    .eq("user_id", userId)
-    .eq("professor_id", professorId)
-    .single();
 
-  if (!draftData || draftFetchError || !draftData.draft_id) {
+  if (!draftId) {
     return res.status(401).json({ updated: false });
   }
 
@@ -516,7 +499,7 @@ router.put("/update-draft/:userId/:professorId", async (req, res) => {
 
     const draft = await gmail.users.drafts.update({
       userId: "me",
-      id: draftData.draft_id,
+      id: draftId,
       requestBody: { message: { raw } },
     });
 
@@ -526,24 +509,25 @@ router.put("/update-draft/:userId/:professorId", async (req, res) => {
   }
 });
 
-router.delete("/delete-draft/:userId/:professorId", async (req, res) => {
-  const { userId, professorId } = req.params;
-  try {
-    const { error: draftDeleteError } = await supabase
-      .from("Emails")
-      .delete()
-      .eq("user_id", userId)
-      .eq("professor_id", professorId)
-      .eq("type", "First")
-      .eq("sent", false)
-      .single();
-
-    if (draftDeleteError) {
-      return res.status(400).json({ message: "Failed To Delete" });
+router.delete(
+  "/delete-draft/:draftId",
+  async (req, res) => {
+    const { draftId, userId, professorId } = req.params;
+    try {
+      const { error: draftDeleteError } = await supabase
+        .from("Emails")
+        .delete()
+        .eq("draft_id", draftId)
+        .single();
+      
+      if (draftDeleteError) {
+        return res.status(400).json({ message: "Failed To Delete" });
+      }
+      return res.status(200).json({ message: "Deleted Successfully" });
+    } catch {
+      return res.status(500).json({ message: "Internal Server Errors" });
     }
-  } catch {
-    return res.status(500).json({ message: "Internal Server Errors" });
   }
-});
+);
 
 export default router;
