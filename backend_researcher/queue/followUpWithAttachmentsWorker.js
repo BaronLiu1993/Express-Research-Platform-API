@@ -1,6 +1,6 @@
 // workers/followUpWorker.js
 import { Worker } from "bullmq";
-import { sendFollowUpEmail, sendFollowUpWithAttachments } from "./queueService.js";
+import { sendFollowUpWithAttachments } from "./queueService.js";
 import { Connection } from "../redis/redis.js";
 
 export const followUpWorkerWithAttachments = new Worker(
@@ -28,11 +28,11 @@ followUpWorkerWithAttachments.on("failed", (job, err) => {
 });
 
 followUpWorkerWithAttachments.on("active", (job) => {
-  console.log(`[Worker] Job is active: trackingId=${job.data.trackingId}`);
+  console.log(`[Worker] Job is active`);
 });
 
 followUpWorkerWithAttachments.on("progress", (job, progress) => {
-  console.log(`[Worker] Job progress for trackingId=${job.data.trackingId}:`, progress);
+  console.log(`[Worker] Job progress`, progress);
 });
 
 followUpWorkerWithAttachments.on("stalled", (jobId) => {

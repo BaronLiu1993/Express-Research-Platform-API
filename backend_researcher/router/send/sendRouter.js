@@ -11,7 +11,7 @@ router.post("/snippet-create-followup-draft", async (req, res) => {
   const { userId, professorData, baseBody } = req.body;
   try {
     const jobs = professorData.map((professor) => ({
-      name: "generate-draft",
+      name: "follow-up-draft-email",
       data: {
         userId,
         professorId: professor.id,
@@ -63,7 +63,7 @@ router.post("/mass-send-followup", async (req, res) => {
         userEmail,
         userName,
         body: {
-          professorId: professor.id,
+          professorId: professor.professor_id,
           professorEmail: professor.email,
           professorName: professor.name,
         },

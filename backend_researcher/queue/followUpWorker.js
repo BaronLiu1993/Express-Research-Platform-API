@@ -33,12 +33,12 @@ followUpWorker.on("failed", (job, err) => {
 });
 
 followUpWorker.on("active", (job) => {
-  console.log(`[Worker] Job is active: trackingId=${job.data.trackingId}`);
+  console.log(`[Worker] Job is active`);
 });
 
 followUpWorker.on("progress", (job, progress) => {
   console.log(
-    `[Worker] Job progress for trackingId=${job.data.trackingId}:`,
+    `[Worker] Job progress:`,
     progress
   );
 });
