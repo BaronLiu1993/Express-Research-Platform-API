@@ -10,11 +10,8 @@ router.get("/repository/get-all-savedId/:userId", async (req, res) => {
       await supabase.from("Saved").select("professor_id").eq("user_id", userId);
     if (professorIdFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
-    }
-
-    
-    console.log(professorIdData)
-    const professorIds = professorIdData.map( item => item.professor_id)
+    }    
+    const professorIds = professorIdData.map(item => item.professor_id)
     return res.status(200).json({ data: professorIds });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });

@@ -17,6 +17,7 @@ import draftRouter from "./router/inbox/draftRouter.js";
 import engagementRouter from "./router/engagement/engagementRouter.js"
 import publicationRouter from "./router/publications/publicationsRouter.js"
 import storageRouter from "./router/storage/storageRouter.js";
+import grantRouter from "./router/grants/grantRouter.js"
 
 import "./queue/sendWorker.js";
 import "./queue/draftWorker.js";
@@ -37,12 +38,14 @@ app.use(
 );
 
 app.use(cookieParser());
+//Make this lower
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
-app.use("/storage", storageRouter)
+app.use("/storage", storageRouter);
 app.use("/auth", authRouter);
-app.use("/publication", publicationRouter)
+app.use("/publication", publicationRouter);
+app.use("/grants", grantRouter);
 app.use("/completed", completedRouter);
 app.use("/saved", savedRouter);
 app.use("/inprogress", inProgressRouter);

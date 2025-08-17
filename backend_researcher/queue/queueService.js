@@ -114,11 +114,11 @@ function makeBodyWithAttachment({
   });
 }
 
-function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
+function makeBody(to, userName, fromEmail, subject, htmlMessage) {
   const mimeMessage = [
     `Content-Type: text/html; charset="UTF-8"`,
     `To: ${to}`,
-    `From: ${fromName} <${fromEmail}>`,
+    `From: ${userName} <${fromEmail}>`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
     ``,
@@ -177,7 +177,6 @@ export async function generateDraftFromSnippetEmail({
 
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const html = Mustache.render(snippetHTML, dynamicFields);
-
     const raw = makeBody(to, fromName, fromEmail, subject, html);
 
     // Create Gmail Draft
@@ -363,7 +362,6 @@ export async function sendSnippetEmailWithAttachments({
   let attachments = [];
 
   if (fileData.resume) {
-    console.log("📎 Attaching resume:", fileData.resume);
     const buffer = await getDriveFileBuffer(fileData.resume, drive);
     const metadata = await drive.files.get({
       fileId: fileData.resume,
@@ -377,7 +375,6 @@ export async function sendSnippetEmailWithAttachments({
   }
 
   if (fileData.transcript) {
-    console.log("📎 Attaching transcript:", fileData.transcript);
     const buffer = await getDriveFileBuffer(fileData.transcript, drive);
     const metadata = await drive.files.get({
       fileId: fileData.transcript,
@@ -406,14 +403,12 @@ export async function sendSnippetEmailWithAttachments({
     attachments,
   });
 
-  // Update draft with attachments
   await gmail.users.drafts.update({
     userId: "me",
     id: draftData.draft_id,
     requestBody: { message: { raw } },
   });
 
-  // Send the draft
   const sendResponse = await gmail.users.drafts.send({
     userId: "me",
     requestBody: {
@@ -421,7 +416,6 @@ export async function sendSnippetEmailWithAttachments({
     },
   });
 
-  // Mark email as sent in Supabase
   await supabase
     .from("Emails")
     .update({
@@ -431,7 +425,6 @@ export async function sendSnippetEmailWithAttachments({
     })
     .eq("draft_id", draftData.draft_id);
 
-  // Move entry from InProgress → Completed
   const { data: inProgressData } = await supabase
     .from("InProgress")
     .select("*")
@@ -488,8 +481,6 @@ export async function generateFollowUpDraftSnippetEmail({
       throw new Error("Missing Gmail tokens");
     }
 
-    console.log("Fetched Gmail tokens");
-
     const trackingId = uuidv4();
     oauth2Client.setCredentials({
       access_token: tokenData.gmail_auth_token,
@@ -514,8 +505,6 @@ export async function generateFollowUpDraftSnippetEmail({
       throw new Error("Snippet not found");
     }
 
-    console.log("Fetched snippet data:", snippetData);
-
     const snippetHTML = snippetData.snippet_html;
     const snippetSubject = snippetData.snippet_subject;
 
@@ -523,15 +512,11 @@ export async function generateFollowUpDraftSnippetEmail({
     const html = Mustache.render(snippetHTML, dynamicFields);
     const raw = makeBody(to, fromName, fromEmail, subject, html);
 
-    console.log("Rendered subject and HTML");
-
     // Create Gmail Draft
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw } },
     });
-
-    console.log("Draft created with ID:", draft.data.id);
 
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
@@ -553,17 +538,15 @@ export async function generateFollowUpDraftSnippetEmail({
 
     return { message: "Draft successfully created" };
   } catch (err) {
-    console.error("Error creating draft:", err);
     return { message: "Failed to create draft" };
   }
 }
-
 
 //Sending Function
 
 export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
   console.log("Starting sendFollowUpEmail with:", { body });
-  console.log(userId)
+  console.log(userId);
   try {
     // Fetch Gmail Tokens
     const { data: tokenData, error: tokenFetchError } = await supabase
@@ -571,13 +554,6 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
-
-    if (tokenFetchError || !tokenData) {
-      console.error("Error fetching Gmail tokens:", tokenFetchError);
-      throw new Error("Missing Gmail tokens");
-    }
-
-    console.log("Fetched Gmail tokens");
 
     oauth2Client.setCredentials({
       access_token: tokenData.gmail_auth_token,
@@ -587,22 +563,30 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
     // Fetch corresponding draft
-    console.log(body.professorId)
-    const { data: draftData, error: draftFetchError } = await supabase
-      .from("Emails")
-      .select("draft_id, tracking_id")
-      .eq("user_id", userId)
-      .eq("professor_id", body.professorId)
-      .eq("type", "followupdraft")
-      .eq("sent", false)
-      .single()
-    if (draftFetchError || !draftData) {
-      console.error("Error fetching draft from Supabase:", draftFetchError);
-      throw new Error("Follow-up draft not found");
+    console.log(body.professorId);
+    console.log(userId);
+
+    let draftData = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { data, error } = await supabase
+        .from("Emails")
+        .select("draft_id, tracking_id")
+        .eq("user_id", userId)
+        .eq("professor_id", body.professorId)
+        .eq("type", "followupdraft")
+        .single();
+
+      draftData = data;
+      draftFetchError = error;
+
+      if (!error && data) {
+        break; 
+      } else {
+        if (attempt < 2) {
+          await new Promise((res) => setTimeout(res, 500)); 
+        }
+      }
     }
-
-    console.log("Fetched draft metadata:", draftData);
-
     // Build tracking pixel
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
 
@@ -611,14 +595,13 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
       userId: "me",
       id: draftData.draft_id,
     });
-
-    
     const payload = draft.data.message.payload;
     const headers = payload.headers || [];
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
     const htmlBody = extractHtmlOrPlainText(payload);
     const finalHtmlBody = htmlBody + trackingPixel;
 
+    console.log(userName);
 
     const raw = makeBody(
       body.professorEmail,
@@ -634,7 +617,6 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
       requestBody: { message: { raw } },
     });
 
-
     // Send the draft
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
@@ -642,7 +624,6 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
         id: draftData.draft_id,
       },
     });
-
 
     // Update Supabase email status
     const { error: insertionError } = await supabase
@@ -654,7 +635,6 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
       })
       .eq("draft_id", draftData.draft_id);
 
-   
     await supabase.from("Messages").insert({
       thread_id: sendResponse.data.threadId,
       message_id: sendResponse.data.id,
@@ -668,19 +648,26 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
   }
 }
 
-
 export async function sendFollowUpWithAttachments({
   userId,
   userEmail,
   userName,
   body,
 }) {
+  console.log("🚀 sendFollowUpWithAttachments START", { userId, body });
+
+  // 1️⃣ Get Gmail OAuth tokens
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
     .eq("user_id", userId)
     .single();
-
+  if (tokenFetchError || !tokenData) {
+    console.error("❌ Failed to fetch Gmail tokens", tokenFetchError);
+    return { error: "Missing Gmail tokens" };
+  }
+  console.log("✅ Gmail tokens fetched");
+  
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
@@ -690,30 +677,60 @@ export async function sendFollowUpWithAttachments({
   const drive = google.drive({ version: "v3", auth: oauth2Client });
   const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-  const { data: draftData, error: draftFetchError } = await supabase
-    .from("Emails")
-    .select("draft_id, tracking_id")
-    .eq("user_id", userId)
-    .eq("professor_id", body.professorId)
-    .eq("type", "followupdraft")
-    .single();
+  // 2️⃣ Retry fetching draft data
+  let draftData = null;
+  let draftFetchError = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`📨 Fetching draft data attempt ${attempt}`);
+    const { data, error } = await supabase
+      .from("Emails")
+      .select("draft_id, tracking_id")
+      .eq("user_id", userId)
+      .eq("professor_id", body.professorId)
+      .eq("type", "followupdraft")
+      .single();
+    draftData = data;
+    draftFetchError = error;
 
-  const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    if (!error && data) {
+      console.log("✅ Draft data fetched:", draftData);
+      break;
+    } else {
+      console.warn(`⚠️ Draft fetch attempt ${attempt} failed:`, error);
+      if (attempt < 3) {
+        await new Promise((res) => setTimeout(res, 500));
+      }
+    }
+  }
+  if (draftFetchError || !draftData) {
+    console.error("❌ Failed to fetch draft after retries");
+    return { error: "No draft found" };
+  }
 
+  // 3️⃣ Fetch Gmail draft content
+  console.log("📩 Fetching Gmail draft:", draftData.draft_id);
   const draft = await gmail.users.drafts.get({
     userId: "me",
     id: draftData.draft_id,
   });
+  console.log("✅ Gmail draft fetched");
 
+  // 4️⃣ Fetch file data from Supabase
+  console.log("📂 Fetching attachments info");
   const { data: fileData, error: fileDataError } = await supabase
     .from("User_Profiles")
     .select("resume, transcript")
     .eq("user_id", userId)
     .single();
+  if (fileDataError) {
+    console.error("❌ Failed to fetch file data", fileDataError);
+    return { error: "Missing file data" };
+  }
 
+  // 5️⃣ Download attachments from Drive
   let attachments = [];
-
   if (fileData.resume) {
+    console.log("⬇️ Downloading resume");
     const buffer = await getDriveFileBuffer(fileData.resume, drive);
     const metadata = await drive.files.get({
       fileId: fileData.resume,
@@ -724,28 +741,33 @@ export async function sendFollowUpWithAttachments({
       mimeType: metadata.data.mimeType,
       content: buffer,
     });
+    console.log("✅ Resume added:", metadata.data.name);
   }
-
   if (fileData.transcript) {
+    console.log("⬇️ Downloading transcript");
     const buffer = await getDriveFileBuffer(fileData.transcript, drive);
     const metadata = await drive.files.get({
       fileId: fileData.transcript,
       fields: "name, mimeType",
     });
-
     attachments.push({
       filename: metadata.data.name,
       mimeType: metadata.data.mimeType,
       content: buffer,
     });
+    console.log("✅ Transcript added:", metadata.data.name);
   }
 
+  // 6️⃣ Prepare email body
   const payload = draft.data.message.payload;
   const headers = payload.headers || [];
   const subject = headers.find((h) => h.name === "Subject")?.value || "";
   const htmlBody = extractHtmlOrPlainText(payload);
+  const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
   const finalHtmlBody = htmlBody + trackingPixel;
+  console.log("📝 Email subject:", subject);
 
+  // 7️⃣ Build raw email with attachments
   const raw = await makeBodyWithAttachment({
     to: body.professorEmail,
     name: userName,
@@ -755,22 +777,23 @@ export async function sendFollowUpWithAttachments({
     attachments,
   });
 
-  // Update draft with attachments
+  // 8️⃣ Update draft in Gmail
+  console.log("✏️ Updating Gmail draft with attachments");
   await gmail.users.drafts.update({
     userId: "me",
     id: draftData.draft_id,
     requestBody: { message: { raw } },
   });
 
-  // Send the draft
+  // 9️⃣ Send the draft
+  console.log("📤 Sending Gmail draft");
   const sendResponse = await gmail.users.drafts.send({
     userId: "me",
-    requestBody: {
-      id: draftData.draft_id,
-    },
+    requestBody: { id: draftData.draft_id },
   });
+  console.log("✅ Draft sent:", sendResponse.data);
 
-  // Mark email as sent in Supabase
+  // 🔟 Update Supabase Email record
   await supabase
     .from("Emails")
     .update({
@@ -779,15 +802,15 @@ export async function sendFollowUpWithAttachments({
       thread_id: sendResponse.data.threadId,
     })
     .eq("draft_id", draftData.draft_id);
+  console.log("✅ Email marked as sent in Supabase");
 
-  // Move entry from InProgress → Completed
+  // 1️⃣1️⃣ Move from InProgress → Completed
   const { data: inProgressData } = await supabase
     .from("InProgress")
     .select("*")
     .eq("user_id", userId)
     .eq("professor_id", body.professorId)
     .single();
-
   if (inProgressData) {
     await supabase.from("Completed").insert(inProgressData);
     await supabase
@@ -795,14 +818,18 @@ export async function sendFollowUpWithAttachments({
       .delete()
       .eq("user_id", userId)
       .eq("professor_id", body.professorId);
+    console.log("✅ Moved InProgress → Completed");
   }
 
+  // 1️⃣2️⃣ Insert tracking message
   await supabase.from("Messages").insert({
     thread_id: sendResponse.data.threadId,
     message_id: sendResponse.data.id,
     tracking_id: draftData.tracking_id,
     type: "FollowUp",
   });
+  console.log("✅ Tracking message inserted");
 
+  console.log("🎉 sendFollowUpWithAttachments DONE");
   return { message: "Successfully Sent!" };
 }

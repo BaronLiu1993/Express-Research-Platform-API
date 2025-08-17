@@ -147,7 +147,7 @@ router.get("/match-professors", async (req, res) => {
     if (matchesFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }
-
+    console.log(matches)
     return res.status(200).json({ matches });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });

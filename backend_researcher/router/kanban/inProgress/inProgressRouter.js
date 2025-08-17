@@ -3,18 +3,21 @@ import express from "express";
 
 const router = express.Router();
 
+//Already Taken
 router.get("/repository/get-all-appliedId/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: professorIdData, error: professorIdFetchError } =
       await supabase
-        .from("InProgress")
+        .from("Completed")
         .select("professor_id")
         .eq("user_id", userId);
+
     if (professorIdFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }
-    return res.status(200).json({ data: professorIdData });
+    const professorIds = professorIdData.map((item) => item.professor_id);
+    return res.status(200).json({ data: professorIds });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });
   }
@@ -46,7 +49,11 @@ router.get("/fetch/draft/:userId", async (req, res) => {
     const { data: draftData, error: fetchError } = await supabase
       .from("Emails")
       .select("draft_id, professor_id")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("type", "draft");
+
+    console.log(draftData);
+    console.log(fetchError);
 
     let totalDraftData = [];
     await Promise.all(

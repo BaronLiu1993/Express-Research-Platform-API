@@ -87,11 +87,9 @@ router.get("/get-status/:userId/:professorId", async (req, res) => {
 });
 
 
-//Get the Base Emails for Display
 router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
   const { userId, threadId } = req.params;
 
-  // Step 1: Get Gmail tokens
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
@@ -108,68 +106,45 @@ router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
   });
 
   try {
-    // Refresh token if needed
     await oauth2Client.getAccessToken();
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    // Step 2: Get thread
+    // **Use 'full' format here for thread, NOT 'raw'**
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
+      format: "full",
     });
 
     const messages = threadData?.data?.messages || [];
-    const messageArray = [];
 
-    for (let i = 0; i < messages.length; i++) {
-      const message = messages[i];
-
-      if (!message?.id) {
-        console.warn(`Skipping message without ID at index ${i}`);
-        continue;
-      }
-
-      try {
-        const messageData = await gmail.users.messages.get({
+    // For each message, get raw format to parse fully
+    const messageArray = await Promise.all(
+      messages.map(async (message) => {
+        const msgData = await gmail.users.messages.get({
           userId: "me",
           id: message.id,
-          format: "raw",
+          format: "raw", // raw here is allowed
         });
 
-        const raw = messageData?.data?.raw;
+        const raw = msgData?.data?.raw || "";
+        const buffer = Buffer.from(raw, "base64");
+        const parsed = await simpleParser(buffer);
 
-        if (!raw) {
-          console.warn(`Skipping message ${message.id}: Missing raw content`);
-          continue;
-        }
-
-        const decoded = decodeBody(raw);
-        const parsed = await simpleParser(decoded);
         const replyParsed = new EmailReplyParser().read(parsed.text || "");
         const visibleBody = replyParsed.getVisibleText();
 
-        const to = parsed.to?.value?.[0] || {};
-        const from = parsed.from?.value?.[0] || {};
-        const subject = parsed.subject || "(No Subject)";
-        const date = parsed.date || null;
-        const labels = message.labelIds || [];
-
-        const messageObj = {
-          labels,
-          to,
-          from,
-          subject,
+        return {
+          labels: message.labelIds || [],
+          to: parsed.to?.value?.[0] || {},
+          from: parsed.from?.value?.[0] || {},
+          subject: parsed.subject || "(No Subject)",
           body: visibleBody,
-          date,
+          date: parsed.date || null,
         };
-
-        messageArray.push(messageObj);
-      } catch (msgErr) {
-        console.warn(`Failed to parse message ${message.id}: ${msgErr.message}`);
-        continue;
-      }
-    }
+      })
+    );
 
     return res.status(200).json({ messageArray });
   } catch (err) {
@@ -177,6 +152,7 @@ router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 
 
 //Get the Full Individual Email Chains

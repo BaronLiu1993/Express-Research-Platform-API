@@ -22,9 +22,7 @@ router.get("/kanban/get-completed/:userId", async (req, res) => {
   }
 });
 
-//Update Method -> Move to FollowUp Section is a CRON Job
 
-//Delete Method
 router.delete(
   "/kanban/delete-completed/:userId/:professorId",
   async (req, res) => {

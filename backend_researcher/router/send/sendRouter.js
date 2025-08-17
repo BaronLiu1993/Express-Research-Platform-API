@@ -4,6 +4,7 @@ import sendWithAttachmentsQueue from "../../queue/sendWithAttachmentsQueue.js";
 import followUpDraftQueue from "../../queue/followUpDraftQueue.js";
 import express from "express";
 import followUpQueue from "../../queue/followUpQueue.js";
+import followUpWithAttachmentsQueue from "../../queue/followUpWithAttachmentsQueue.js";
 
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.post("/snippet-create-followup-draft", async (req, res) => {
       },
     }));
     await followUpDraftQueue.addBulk(jobs);
-    res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
+    res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Failed to queue bulk emails" });
@@ -31,22 +32,25 @@ router.post("/snippet-create-followup-draft", async (req, res) => {
 });
 
 router.post("/mass-send-followup-with-attachments", async (req, res) => {
+  console.log("fired")
   const { userId, userEmail, userName, professorData } = req.body;
+  console.log(professorData)
   try {
     const jobs = professorData.map((professor) => ({
-      name: "send-email-with-attachments",
+      name: "follow-up-email-with-attachments",
       data: {
         userId,
         userEmail,
         userName,
         body: {
-          professorId: professor.id,
+          professorId: professor.professor_id,
           professorEmail: professor.email,
           professorName: professor.name,
         },
       },
     }));
-    await followUpQueue.addBulk(jobs);
+    console.log(jobs)
+    await followUpWithAttachmentsQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {
     res.status(500).json({ message: "Failed to queue bulk emails" });
@@ -57,7 +61,7 @@ router.post("/mass-send-followup", async (req, res) => {
   const { userId, userEmail, userName, professorData } = req.body;
   try {
     const jobs = professorData.map((professor) => ({
-      name: "send-email",
+      name: "follow-up-draft-email",
       data: {
         userId,
         userEmail,
@@ -103,6 +107,7 @@ router.post("/snippet-create-draft", async (req, res) => {
 
 router.post("/mass-send-with-attachments", async (req, res) => {
   const { userId, userEmail, userName, professorData } = req.body;
+  console.log(userId, userEmail, userName, professorData)
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email-with-attachments",
@@ -117,6 +122,7 @@ router.post("/mass-send-with-attachments", async (req, res) => {
         },
       },
     }));
+    console.log(jobs)
     await sendWithAttachmentsQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {
@@ -126,6 +132,7 @@ router.post("/mass-send-with-attachments", async (req, res) => {
 
 router.post("/mass-send", async (req, res) => {
   const { userId, userEmail, userName, professorData } = req.body;
+  console.log(userName)
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
