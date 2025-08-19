@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 
 router.get("/pixel.png", async (req, res) => {
   const { analyticId } = req.query;
-  // Get The Tracking ID and insert
   if (analyticId) {
     const timestamp = new Date().toISOString();
     const { error: updateError } = await supabase

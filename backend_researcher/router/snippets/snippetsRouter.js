@@ -15,12 +15,12 @@ function removeBracketPlaceholders(str) {
 
 
 router.post("/insert/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
   const { snippet_html, snippet_subject } = req.body;
 
   const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
   try {
-    const { data: insertionData, error: insertionError } = await supabase
+    const { data: insertionData, error: insertionError } = await req.supabaseClient
       .from("snippets")
       .insert({
         user_id: userId,
@@ -28,8 +28,11 @@ router.post("/insert/:userId", verifyToken, async (req, res) => {
         snippet_subject: snippet_subject,
         snippet_name: `${userId}Snippet`,
       })
-      .select("id")
       .single();
+    if (insertionError) {
+      return res.status(400).json({message: "Failed To Insert"})
+    }
+    
     const snippetId = insertionData.id;
     return res.status(200).json({ snippetId });
   } catch {
@@ -55,7 +58,7 @@ router.post("/sync-fetchable-variables/:userId", verifyToken, async (req, res) =
       const professorId = professorIdArray[i];
       console.log(`🔍 Processing professorId [${i}]:`, professorId);
 
-      const { data: constantData, error: constantError } = await supabase
+      const { data: constantData, error: constantError } = await req.supabaseClient
         .from("Taishan")
         .select("email")
         .eq("id", professorId)
@@ -69,7 +72,7 @@ router.post("/sync-fetchable-variables/:userId", verifyToken, async (req, res) =
 
       let variableData = {};
       if (filteredFields.length > 0) {
-        const { data, error: variableError } = await supabase
+        const { data, error: variableError } = await req.supabaseClient
           .from("Taishan")
           .select(filteredFields.join())
           .eq("id", professorId)
@@ -105,7 +108,7 @@ router.post("/sync-fetchable-variables/:userId", verifyToken, async (req, res) =
 
     return res.status(200).json({ result, status: "synced" });
 
-  } catch (err) {
+  } catch {
     return res.status(500).json({
       message: "Internal Server Error",
       status: "failed",

@@ -131,12 +131,12 @@ router.get("/taishan", verifyToken, async (req, res) => {
 });
 
 router.get("/match-professors", verifyToken, async (req, res) => {
-  const { userId } = req.query;
+  const userId = req.user.sub;
   const match_count = 10;
   const match_threshold = 0.2;
 
   try {
-    const { data: matches, error: matchesFetchError } = await supabase.rpc(
+    const { data: matches, error: matchesFetchError } = await req.supabaseClient.rpc(
       "match_professors_for_student",
       {
         student_id: userId,

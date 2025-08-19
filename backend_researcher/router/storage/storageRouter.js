@@ -1,6 +1,5 @@
 import express from "express";
 import { google } from "googleapis";
-import { supabase } from "../../supabase/supabase.js";
 import dotenv from "dotenv";
 import { uploadInstance } from "./storageMiddleware.js";
 import { Readable } from "node:stream";
@@ -17,9 +16,8 @@ const oauth2Client = new google.auth.OAuth2(
 
 router.get("/get-file-links/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
-  const { uploadType } = req.query;
   try {
-    const { data: linkData, error: fetchDataError } = await supabase
+    const { data: linkData, error: fetchDataError } = await req.supabaseClient
       .from("User_Profiles")
       .select("transcript, resume")
       .eq("user_id", userId)
@@ -71,7 +69,7 @@ router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.sing
         },
       });
 
-      const { error: insertionError } = await supabase
+      const { error: insertionError } = await req.supabaseClient
         .from("User_Profiles")
         .update({ transcript: response.data.id })
         .eq("user_id", userId);
@@ -88,7 +86,7 @@ router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.sing
 //Uploading Resumes
 router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("file"),
   async (req, res) => {
-    const { userId } = req.params;
+    const userId = req.user.sub;
     const file = req.file;
     const bufferStream = new Readable();
     bufferStream.push(req.file.buffer);
@@ -96,7 +94,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
     console.log(userId);
 
     try {
-      const { data: tokenData, error: tokenFetchError } = await supabase
+      const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
         .from("User_Profiles")
         .select("gmail_auth_token, gmail_refresh_token")
         .eq("user_id", userId)
@@ -122,7 +120,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
         },
       });
 
-      const { error: insertionError } = await supabase
+      const { error: insertionError } = await req.supabaseClient
         .from("User_Profiles")
         .update({ resume: response.data.id })
         .eq("user_id", userId);
@@ -140,7 +138,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
 router.get("/get-resume/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
-    const { data: tokenData, error: tokenFetchError } = await supabase
+    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
@@ -154,7 +152,7 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
       refresh_token: tokenData.gmail_refresh_token,
     });
 
-    const { data: resumeData, error: resumeDataFetchError } = await supabase
+    const { data: resumeData, error: resumeDataFetchError } = await req.supabaseClient
       .from("User_Profiles")
       .select("resume")
       .eq("user_id", userId)
@@ -181,7 +179,7 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
 router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
-    const { data: tokenData, error: tokenFetchError } = await supabase
+    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
@@ -196,7 +194,7 @@ router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
     });
 
     const { data: transcriptData, error: transcriptDataFetchError } =
-      await supabase
+      await req.supabaseClient
         .from("User_Profiles")
         .select("transcript")
         .eq("user_id", userId)

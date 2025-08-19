@@ -4,11 +4,14 @@ import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
-router.get("/repository/get-all-appliedId/:userId", verifyToken, async (req, res) => {
-    const { userId } = req.params;
+router.get(
+  "/repository/get-all-appliedId/:userId",
+  verifyToken,
+  async (req, res) => {
+    const userId = req.user.sub;
     try {
       const { data: professorIdData, error: professorIdFetchError } =
-        await supabase
+        await req.supabaseClient
           .from("Completed")
           .select("professor_id")
           .eq("user_id", userId);
@@ -26,9 +29,9 @@ router.get("/repository/get-all-appliedId/:userId", verifyToken, async (req, res
 
 //Get Kanban
 router.get("/kanban/get-in-progress/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
   try {
-    const { data: savedData, error: savedFetchError } = await supabase
+    const { data: savedData, error: savedFetchError } = await req.supabaseClient
       .from("InProgress")
       .select("*")
       .eq("user_id", userId)
@@ -45,9 +48,9 @@ router.get("/kanban/get-in-progress/:userId", verifyToken, async (req, res) => {
 });
 
 router.get("/fetch/draft/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
   try {
-    const { data: draftData, error: fetchError } = await supabase
+    const { data: draftData, error: fetchError } = await req.supabaseClient
       .from("Emails")
       .select("draft_id, professor_id")
       .eq("user_id", userId)
@@ -56,7 +59,7 @@ router.get("/fetch/draft/:userId", verifyToken, async (req, res) => {
     await Promise.all(
       draftData.map(async (prof) => {
         const { data: professorData, error: professorFetchError } =
-          await supabase
+          await req.supabaseClient
             .from("Taishan")
             .select("name, email")
             .eq("id", prof.professor_id)
@@ -86,8 +89,12 @@ router.get("/fetch/draft/:userId", verifyToken, async (req, res) => {
 });
 
 //Add To In Progress
-router.post("/kanban/add-in-progress/:userId/:professorId", verifyToken, async (req, res) => {
-    const { userId, professorId } = req.params;
+router.post(
+  "/kanban/add-in-progress/:userId/:professorId",
+  verifyToken,
+  async (req, res) => {
+    const userId = req.user.sub;
+    const { professorId } = req.params;
     const {
       name,
       email,
@@ -105,16 +112,21 @@ router.post("/kanban/add-in-progress/:userId/:professorId", verifyToken, async (
     }
 
     try {
-      const { data: savedData, error: fetchSavedError } = await supabase
-        .from("Saved")
-        .select("comments, professorId")
-        .eq("professor_id", professorId)
-        .eq("user_id", userId);
+      const { data: savedData, error: fetchSavedError } =
+        await req.supabaseClient
+          .from("Saved")
+          .select("comments, professorId")
+          .eq("professor_id", professorId)
+          .eq("user_id", userId);
 
       let comments = "";
 
+      if (fetchSavedError) {
+        return res.status(400).json({ message: "Failed To Fetch Saved Data" });
+      }
+
       if (savedData?.length > 0) {
-        const { error: savedDataDeletionError } = await supabase
+        const { error: savedDataDeletionError } = await req.supabaseClient
           .from("Saved")
           .delete()
           .eq("professor_id", professorId)
@@ -128,7 +140,7 @@ router.post("/kanban/add-in-progress/:userId/:professorId", verifyToken, async (
         }
       }
 
-      const { error: inProgressInsertionError } = await supabase
+      const { error: inProgressInsertionError } = await req.supabaseClient
         .from("InProgress")
         .insert({
           user_id: userId,
@@ -161,11 +173,15 @@ router.post("/kanban/add-in-progress/:userId/:professorId", verifyToken, async (
   }
 );
 
-router.delete("/kanban/delete-in-progress/:userId/:professorId", verifyToken, async (req, res) => {
-    const { userId, professorId } = req.params;
+router.delete(
+  "/kanban/delete-in-progress/:userId/:professorId",
+  verifyToken,
+  async (req, res) => {
+    const { professorId } = req.params;
+    const userId = req.user.sub;
 
     try {
-      const { error: deletionError } = await supabase
+      const { error: deletionError } = await req.supabaseClient
         .from("InProgress")
         .delete()
         .eq("user_id", userId)

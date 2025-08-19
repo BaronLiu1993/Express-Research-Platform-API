@@ -1,14 +1,13 @@
 import express from "express";
-import { supabase } from "../../../supabase/supabase.js";
 import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
 router.get("/repository/get-all-savedId/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
   try {
     const { data: professorIdData, error: professorIdFetchError } =
-      await supabase.from("Saved").select("professor_id").eq("user_id", userId);
+      await req.supabaseClient.from("Saved").select("professor_id").eq("user_id", userId);
     if (professorIdFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }    
@@ -20,9 +19,9 @@ router.get("/repository/get-all-savedId/:userId", verifyToken, async (req, res) 
 });
 
 router.get("/kanban/get-saved/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
   try {
-    const { data: savedData, error: savedFetchError } = await supabase
+    const { data: savedData, error: savedFetchError } = await req.supabaseClient
       .from("Saved")
       .select("*")
       .eq("user_id", userId)
@@ -37,7 +36,9 @@ router.get("/kanban/get-saved/:userId", verifyToken, async (req, res) => {
 });
 
 router.post("/kanban/add-saved/:userId/:professorId", verifyToken, async (req, res) => {
-  const { userId, professorId } = req.params;
+  const { professorId } = req.params;
+  const userId = req.user.sub;
+s
   const {
     name,
     email,
@@ -51,7 +52,7 @@ router.post("/kanban/add-saved/:userId/:professorId", verifyToken, async (req, r
     comments,
   } = req.body;
   try {
-    const { error: savedInsertionError } = await supabase
+    const { error: savedInsertionError } = await req.supabaseClient
       .from("Saved")
       .insert({
         user_id: userId,
@@ -81,7 +82,8 @@ router.post("/kanban/add-saved/:userId/:professorId", verifyToken, async (req, r
 });
 
 router.delete("/kanban/remove-saved/:userId/:professorId", verifyToken, async (req, res) => {
-  const { userId, professorId } = req.params;
+  const { professorId } = req.params;
+  const userId = req.user.sub;
 
   if (!professorId || !userId) {
     return res
@@ -89,7 +91,7 @@ router.delete("/kanban/remove-saved/:userId/:professorId", verifyToken, async (r
       .json({ message: "Professor ID and User ID is required." });
   }
   try {
-    const { error: savedDeletionError } = await supabase
+    const { error: savedDeletionError } = await req.supabaseClient
       .from("Saved")
       .delete()
       .eq("user_id", userId)

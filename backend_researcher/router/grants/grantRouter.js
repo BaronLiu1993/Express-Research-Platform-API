@@ -1,12 +1,13 @@
+import { verifyToken } from "../../services/authServices.js";
 import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 
 const router = express.Router();
 
 //Implement Pagination Too
-router.get("/get-grants", async (req, res) => {
+router.get("/get-grants", verifyToken, async (req, res) => {
   try {
-    const { data: grantData, error: grantFetchError } = await supabase
+    const { data: grantData, error: grantFetchError } = await req.supabaseClient
       .from("Grants")
       .select("*");
 

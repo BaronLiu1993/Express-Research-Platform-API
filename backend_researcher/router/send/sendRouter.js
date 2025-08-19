@@ -5,11 +5,14 @@ import followUpDraftQueue from "../../queue/followUpDraftQueue.js";
 import express from "express";
 import followUpQueue from "../../queue/followUpQueue.js";
 import followUpWithAttachmentsQueue from "../../queue/followUpWithAttachmentsQueue.js";
+import { verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 
-router.post("/snippet-create-followup-draft", async (req, res) => {
-  const { userId, professorData, baseBody } = req.body;
+router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
+  const { professorData, baseBody } = req.body;
+  const userId = req.user.sub;
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-draft-email",
@@ -30,8 +33,10 @@ router.post("/snippet-create-followup-draft", async (req, res) => {
   }
 });
 
-router.post("/mass-send-followup-with-attachments", async (req, res) => {
-  const { userId, userEmail, userName, professorData } = req.body;
+router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res) => {
+  const { userEmail, userName, professorData } = req.body;
+  const userId = req.user.sub;
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-email-with-attachments",
@@ -53,8 +58,10 @@ router.post("/mass-send-followup-with-attachments", async (req, res) => {
   }
 });
 
-router.post("/mass-send-followup", async (req, res) => {
-  const { userId, userEmail, userName, professorData } = req.body;
+router.post("/mass-send-followup", verifyToken, async (req, res) => {
+  const { userEmail, userName, professorData } = req.body;
+  const userId = req.user.sub;
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-draft-email",
@@ -78,8 +85,10 @@ router.post("/mass-send-followup", async (req, res) => {
 
 //Normal First Email
 
-router.post("/snippet-create-draft", async (req, res) => {
-  const { userId, professorData, baseBody } = req.body;
+router.post("/snippet-create-draft", verifyToken, async (req, res) => {
+  const { professorData, baseBody } = req.body;
+  const userId = req.user.sub;
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
@@ -101,9 +110,10 @@ router.post("/snippet-create-draft", async (req, res) => {
   }
 });
 
-router.post("/mass-send-with-attachments", async (req, res) => {
-  const { userId, userEmail, userName, professorData } = req.body;
-  console.log(userId, userEmail, userName, professorData)
+router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
+  const { userEmail, userName, professorData } = req.body;
+  const userId = req.user.sub;
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email-with-attachments",
@@ -126,9 +136,10 @@ router.post("/mass-send-with-attachments", async (req, res) => {
   }
 });
 
-router.post("/mass-send", async (req, res) => {
-  const { userId, userEmail, userName, professorData } = req.body;
-  console.log(userName)
+router.post("/mass-send", verifyToken, async (req, res) => {
+  const { userEmail, userName, professorData } = req.body;
+  const userId = req.user.sub;
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",

@@ -8,7 +8,6 @@ export const draftWorker = new Worker(
       const { userId, professorId, body } = job.data;
       try {
         
-        // Call your existing sendSnippetEmail function with correct parameters
         const result = await generateDraftFromSnippetEmail({ userId, professorId, body });
         
         console.log(`Email Created Sucessfully for professor ${professorId}`);

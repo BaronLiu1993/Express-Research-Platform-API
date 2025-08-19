@@ -5,9 +5,10 @@ import { verifyToken } from "../../../services/authServices.js";
 const router = express.Router();
 
 router.get("/kanban/get-completed/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
+
   try {
-    const { data: completedData, error: completedFetchError } = await supabase
+    const { data: completedData, error: completedFetchError } = await req.supabaseClient
       .from("Completed")
       .select("*")
       .eq("user_id", userId)
@@ -24,9 +25,10 @@ router.get("/kanban/get-completed/:userId", verifyToken, async (req, res) => {
 
 
 router.delete("/kanban/delete-completed/:userId/:professorId", verifyToken, async (req, res) => {
-    const { userId, professorId } = req.params;
+    const { professorId } = req.params;
+    const userId = req.user.sub;
     try {
-      const { error: deletionError } = await supabase
+      const { error: deletionError } = await req.supabaseClient
         .from("Completed")
         .delete()
         .eq("user_id", userId)
@@ -44,14 +46,15 @@ router.delete("/kanban/delete-completed/:userId/:professorId", verifyToken, asyn
 );
 
 router.post("/kanban/add-completed/:userId/:professorId", verifyToken, async (req, res) => {
-  const { userId, professorId } = req.params;
+  const { professorId } = req.params;
+  const userId = req.user.sub;
 
   if (!userId || !professorId) {
     return res.status(400).json({ message: "Frontend Error" });
   }
 
   try {
-    const { data: inProgressData, error: inProgressFetchError } = await supabase
+    const { data: inProgressData, error: inProgressFetchError } = await req.supabaseClient
       .from("InProgress")
       .select("*")
       .eq("user_id", userId)
@@ -85,7 +88,7 @@ router.post("/kanban/add-completed/:userId/:professorId", verifyToken, async (re
         .json({ message: "Failed to update application columns." });
     }
 
-    const { error: inProgressDeletionError } = await supabase
+    const { error: inProgressDeletionError } = await req.supabaseClient
       .from("InProgress")
       .delete()
       .eq("user_id", userId)

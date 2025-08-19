@@ -1,6 +1,3 @@
-//Supabase Client Import
-import { supabase } from "../../supabase/supabase.js";
-
 //External Library Imports
 import { google } from "googleapis";
 import express from "express";
@@ -10,6 +7,7 @@ import { simpleParser } from "mailparser";
 
 //Google Service Service Layer
 import { decodeBody } from "../../services/googleServices.js";
+import { verifyToken } from "../../services/authServices.js";
 
 dotenv.config();
 
@@ -21,10 +19,10 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-router.get("/get-engagement/:threadId/:messageId", async (req, res) => {
+router.get("/get-engagement/:threadId/:messageId", verifyToken, async (req, res) => {
   const { threadId, messageId } = req.params;
   try {
-    const { data: messageData, error: messageDataError } = await supabase
+    const { data: messageData, error: messageDataError } = await req.supabaseClient
       .from("Messages")
       .select("opened, opened_at")
       .eq("thread_id", threadId)
@@ -43,10 +41,10 @@ router.get("/get-engagement/:threadId/:messageId", async (req, res) => {
   }
 });
 
-router.get("/get-seen/:threadId/:messageId", async (req, res) => {
+router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
   const { threadId, messageId } = req.params;
   try {
-    const { data: messageData, error: messageDataError } = await supabase
+    const { data: messageData, error: messageDataError } = await req.supabaseClient
       .from("Messages")
       .select("opened_email, opened_email_at")
       .eq("thread_id", threadId)
@@ -66,10 +64,10 @@ router.get("/get-seen/:threadId/:messageId", async (req, res) => {
   }
 });
 
-router.get("/get-status/:userId/:professorId", async (req, res) => {
+router.get("/get-status/:userId/:professorId", verifyToken, async (req, res) => {
   const { userId, professorId } = req.params;
   try {
-    const { data: messageData, error: messageDataError } = await supabase
+    const { data: messageData, error: messageDataError } = await req.supabaseClient
       .from("Completed")
       .select("status")
       .eq("user_id", userId)
@@ -87,10 +85,10 @@ router.get("/get-status/:userId/:professorId", async (req, res) => {
 });
 
 
-router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
-  const { userId, threadId } = req.params;
-
-  const { data: tokenData, error: tokenFetchError } = await supabase
+router.get("/get-full-email-chain/:userId/:threadId", verifyToken, async (req, res) => {
+  const { threadId } = req.params;
+  const userId = req.user.sub
+  const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
     .eq("user_id", userId)
@@ -110,7 +108,6 @@ router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    // **Use 'full' format here for thread, NOT 'raw'**
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
@@ -119,13 +116,12 @@ router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
 
     const messages = threadData?.data?.messages || [];
 
-    // For each message, get raw format to parse fully
     const messageArray = await Promise.all(
       messages.map(async (message) => {
         const msgData = await gmail.users.messages.get({
           userId: "me",
           id: message.id,
-          format: "raw", // raw here is allowed
+          format: "raw", 
         });
 
         const raw = msgData?.data?.raw || "";
@@ -157,9 +153,8 @@ router.get("/get-full-email-chain/:userId/:threadId", async (req, res) => {
 
 //Get the Full Individual Email Chains
 router.get("/get-email-chain/:userId", async (req, res) => {
-  const { userId } = req.params;
-  console.log(userId)
-  const { data: completedData, error: completedFetchError } = await supabase
+  const userId = req.user.sub
+  const { data: completedData, error: completedFetchError } = await req.supabaseClient
     .from("Completed")
     .select("professor_id")
     .eq("user_id", userId);
@@ -172,7 +167,7 @@ router.get("/get-email-chain/:userId", async (req, res) => {
 
   const completedProfessorIds = completedData.map((row) => row.professor_id);
 
-  const { data: tokenData, error: tokenFetchError } = await supabase
+  const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
     .from("User_Profiles")
     .select(
       "gmail_auth_token, gmail_refresh_token, student_email, student_lastname, student_firstname"
@@ -184,7 +179,7 @@ router.get("/get-email-chain/:userId", async (req, res) => {
     return res.status(401).json({ error: "Token fetch error" });
   }
 
-  const { data: threadData, error: threadFetchError } = await supabase
+  const { data: threadData, error: threadFetchError } = await req.supabaseClient
     .from("Emails")
     .select("thread_id, professor_id")
     .eq("user_id", userId)
@@ -195,7 +190,7 @@ router.get("/get-email-chain/:userId", async (req, res) => {
     return res.status(401).json({ error: "Thread fetch error" });
   }
 
-  const { data: professorData, error: professorFetchError } = await supabase
+  const { data: professorData, error: professorFetchError } = await req.supabaseClient
     .from("Taishan")
     .select("id, name, email")
     .in("id", completedProfessorIds);
