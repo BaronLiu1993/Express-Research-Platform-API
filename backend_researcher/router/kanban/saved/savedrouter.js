@@ -1,9 +1,10 @@
 import express from "express";
 import { supabase } from "../../../supabase/supabase.js";
+import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
-router.get("/repository/get-all-savedId/:userId", async (req, res) => {
+router.get("/repository/get-all-savedId/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: professorIdData, error: professorIdFetchError } =
@@ -18,7 +19,7 @@ router.get("/repository/get-all-savedId/:userId", async (req, res) => {
   }
 });
 
-router.get("/kanban/get-saved/:userId", async (req, res) => {
+router.get("/kanban/get-saved/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: savedData, error: savedFetchError } = await supabase
@@ -35,7 +36,7 @@ router.get("/kanban/get-saved/:userId", async (req, res) => {
   }
 });
 
-router.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
+router.post("/kanban/add-saved/:userId/:professorId", verifyToken, async (req, res) => {
   const { userId, professorId } = req.params;
   const {
     name,
@@ -79,7 +80,7 @@ router.post("/kanban/add-saved/:userId/:professorId", async (req, res) => {
   }
 });
 
-router.delete("/kanban/remove-saved/:userId/:professorId", async (req, res) => {
+router.delete("/kanban/remove-saved/:userId/:professorId", verifyToken, async (req, res) => {
   const { userId, professorId } = req.params;
 
   if (!professorId || !userId) {
@@ -99,11 +100,8 @@ router.delete("/kanban/remove-saved/:userId/:professorId", async (req, res) => {
         .status(400)
         .json({ message: "Could not delete application data." });
     }
-
     return res.status(200).json({ message: "Professor removed successfully." });
   } catch (err) {
-    console.log(err);
-
     return res.status(500).json({ message: "An unexpected error occurred." });
   }
 });

@@ -1,10 +1,10 @@
 import { supabase } from "../../../supabase/supabase.js";
 import express from "express";
+import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
-//Get Method
-router.get("/kanban/get-completed/:userId", async (req, res) => {
+router.get("/kanban/get-completed/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: completedData, error: completedFetchError } = await supabase
@@ -23,9 +23,7 @@ router.get("/kanban/get-completed/:userId", async (req, res) => {
 });
 
 
-router.delete(
-  "/kanban/delete-completed/:userId/:professorId",
-  async (req, res) => {
+router.delete("/kanban/delete-completed/:userId/:professorId", verifyToken, async (req, res) => {
     const { userId, professorId } = req.params;
     try {
       const { error: deletionError } = await supabase
@@ -45,8 +43,7 @@ router.delete(
   }
 );
 
-//Post Method
-router.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
+router.post("/kanban/add-completed/:userId/:professorId", verifyToken, async (req, res) => {
   const { userId, professorId } = req.params;
 
   if (!userId || !professorId) {
@@ -54,7 +51,6 @@ router.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
   }
 
   try {
-    // Insert into completed
     const { data: inProgressData, error: inProgressFetchError } = await supabase
       .from("InProgress")
       .select("*")
@@ -89,7 +85,6 @@ router.post("/kanban/add-completed/:userId/:professorId", async (req, res) => {
         .json({ message: "Failed to update application columns." });
     }
 
-    // delete from in progress
     const { error: inProgressDeletionError } = await supabase
       .from("InProgress")
       .delete()

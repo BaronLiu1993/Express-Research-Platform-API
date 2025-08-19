@@ -4,6 +4,7 @@ import { supabase } from "../../supabase/supabase.js";
 import dotenv from "dotenv";
 import { uploadInstance } from "./storageMiddleware.js";
 import { Readable } from "node:stream";
+import { verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 dotenv.config();
@@ -14,7 +15,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-router.get("/get-file-links/:userId", async (req, res) => {
+router.get("/get-file-links/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   const { uploadType } = req.query;
   try {
@@ -35,10 +36,7 @@ router.get("/get-file-links/:userId", async (req, res) => {
 
 //Uploading Transcripts
 
-router.post(
-  "/upload-transcript-links/:userId",
-  uploadInstance.single("file"),
-  async (req, res) => {
+router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.single("file"), async (req, res) => {
     const { userId } = req.params;
     const file = req.file;
     const bufferStream = new Readable();
@@ -72,28 +70,23 @@ router.post(
           body: bufferStream,
         },
       });
-      console.log(response);
 
       const { error: insertionError } = await supabase
         .from("User_Profiles")
         .update({ transcript: response.data.id })
         .eq("user_id", userId);
-      console.log(insertionError);
       if (insertionError) {
         return res.status(400).json({ message: "Failed To Insert" });
       }
       return res.status(200).json({ message: "Successfully Inserted" });
     } catch (err) {
-      console.log(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
 );
 
 //Uploading Resumes
-router.post(
-  "/upload-resume-links/:userId",
-  uploadInstance.single("file"),
+router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("file"),
   async (req, res) => {
     const { userId } = req.params;
     const file = req.file;
@@ -139,13 +132,12 @@ router.post(
       }
       return res.status(200).json({ message: "Successfully Inserted" });
     } catch (err) {
-      console.log(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
 );
 
-router.get("/get-resume/:userId", async (req, res) => {
+router.get("/get-resume/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: tokenData, error: tokenFetchError } = await supabase
@@ -186,7 +178,7 @@ router.get("/get-resume/:userId", async (req, res) => {
   }
 });
 
-router.get("/get-transcript/:userId", async (req, res) => {
+router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: tokenData, error: tokenFetchError } = await supabase
@@ -203,11 +195,12 @@ router.get("/get-transcript/:userId", async (req, res) => {
       refresh_token: tokenData.gmail_refresh_token,
     });
 
-    const { data: transcriptData, error: transcriptDataFetchError } = await supabase
-      .from("User_Profiles")
-      .select("transcript")
-      .eq("user_id", userId)
-      .single();
+    const { data: transcriptData, error: transcriptDataFetchError } =
+      await supabase
+        .from("User_Profiles")
+        .select("transcript")
+        .eq("user_id", userId)
+        .single();
 
     if (transcriptDataFetchError) {
       return res

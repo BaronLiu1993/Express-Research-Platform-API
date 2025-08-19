@@ -1,5 +1,6 @@
 import { supabase } from "../../supabase/supabase.js";
 import express from "express";
+import { verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ function removeBracketPlaceholders(str) {
 }
 
 
-router.post("/insert/:userId", async (req, res) => {
+router.post("/insert/:userId", verifyToken, async (req, res) => {
   const { userId } = req.params;
   const { snippet_html, snippet_subject } = req.body;
 
@@ -25,7 +26,7 @@ router.post("/insert/:userId", async (req, res) => {
         user_id: userId,
         snippet_html: parsedSnippetHtml,
         snippet_subject: snippet_subject,
-        snippet_name: "Test",
+        snippet_name: `${userId}Snippet`,
       })
       .select("id")
       .single();
@@ -36,24 +37,8 @@ router.post("/insert/:userId", async (req, res) => {
   }
 });
 
-router.get("/get-all/:userId", async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const { data: getData, error: getError } = await supabase
-      .from("snippets")
-      .select("id, snippet_html, snippet_subject")
-      .eq("user_id", userId);
-    return res.status(200).json({ message: getData });
-  } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
-router.post("/sync-fetchable-variables/:userId", async (req, res) => {
+router.post("/sync-fetchable-variables/:userId", verifyToken, async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
-  console.log(professorIdArray)
-  console.log(variableArray)
-
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
     return res.status(400).json({ message: "Invalid input arrays" });
   }
@@ -116,10 +101,8 @@ router.post("/sync-fetchable-variables/:userId", async (req, res) => {
       }
 
       result.push(resultEntry);
-      console.log(`✅ Finished professorId [${i}]:`, resultEntry);
     }
 
-    console.log("✅ [SUCCESS] Returning full result.");
     return res.status(200).json({ result, status: "synced" });
 
   } catch (err) {
