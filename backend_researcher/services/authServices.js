@@ -24,7 +24,7 @@ export async function generateEmbeddings(research_input_embeddings) {
 
 export async function refreshToken() {}
 
-export async function verifyToken() {
+export async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader)
     return res.status(401).json({ message: "Missing Authorization header" });

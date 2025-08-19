@@ -4,6 +4,7 @@ import express from "express";
 //External Library Imports
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import { verifyToken } from "../../services/authServices.js";
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ const OPEN_AI = new OpenAI({
 
 const router = express.Router();
 
-router.get("/taishan/filter", async (req, res) => {
+router.get("/taishan/filter", verifyToken ,async (req, res) => {
   const { page = 1, ...filters } = req.query;
   const pageNumber = parseInt(page);
   const limit = 20;
@@ -54,7 +55,7 @@ router.get("/taishan/filter", async (req, res) => {
   }
 });
 
-router.get("/taishan", async (req, res) => {
+router.get("/taishan", verifyToken, async (req, res) => {
   const { page, search } = req.query;
   const pageNumber = parseInt(page) || 1;
   const limit = 20;
@@ -129,9 +130,8 @@ router.get("/taishan", async (req, res) => {
   }
 });
 
-router.get("/match-professors", async (req, res) => {
+router.get("/match-professors", verifyToken, async (req, res) => {
   const { userId } = req.query;
-  console.log(userId)
   const match_count = 10;
   const match_threshold = 0.2;
 
@@ -147,7 +147,6 @@ router.get("/match-professors", async (req, res) => {
     if (matchesFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }
-    console.log(matches)
     return res.status(200).json({ matches });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
