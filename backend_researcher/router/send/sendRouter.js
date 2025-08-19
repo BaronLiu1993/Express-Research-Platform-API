@@ -26,15 +26,12 @@ router.post("/snippet-create-followup-draft", async (req, res) => {
     await followUpDraftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
-    console.log(err);
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
 
 router.post("/mass-send-followup-with-attachments", async (req, res) => {
-  console.log("fired")
   const { userId, userEmail, userName, professorData } = req.body;
-  console.log(professorData)
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-email-with-attachments",
@@ -49,7 +46,6 @@ router.post("/mass-send-followup-with-attachments", async (req, res) => {
         },
       },
     }));
-    console.log(jobs)
     await followUpWithAttachmentsQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {

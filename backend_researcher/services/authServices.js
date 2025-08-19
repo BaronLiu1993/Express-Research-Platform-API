@@ -1,22 +1,49 @@
 //External Library Imports
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
 //Initialise OpenAI Client
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const SUPABASE_JWT_SECRET= process.env.SUPABASE_JWT_SECRET
+const SUPABASE_JWT_ALGORITHM= process.env.SUPABASE_JWT_ALGORITHM
+
 const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
 });
 
 export async function generateEmbeddings(research_input_embeddings) {
-    const embeddings = await OPEN_AI.embeddings.create({
-        model: "text-embedding-3-large",
-        input: research_input_embeddings,
-    });
-    return embeddings
+  const embeddings = await OPEN_AI.embeddings.create({
+    model: "text-embedding-3-large",
+    input: research_input_embeddings,
+  });
+  return embeddings;
 }
 
+export async function refreshToken() {}
 
+export async function verifyToken() {
+  const authHeader = req.headers.authorization;
+  if (!authHeader)
+    return res.status(401).json({ message: "Missing Authorization header" });
 
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Missing token" });
+  }
+  try {
+    const payload = jwt.verify(token, SUPABASE_JWT_SECRET, {
+      algorithms: [`${SUPABASE_JWT_ALGORITHM}`],
+    });
+    req.user = payload;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+}
+
+export async function encrypt() {}
+
+export async function decrypt() {}
