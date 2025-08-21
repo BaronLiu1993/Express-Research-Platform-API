@@ -266,7 +266,6 @@ router.get("/get-user-id-email", async (req, res) => {
       student_motivation: profile.student_motivation,
     });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ message: "Unexpected server error" });
   }
 });
@@ -310,60 +309,6 @@ router.get("/get-user-sidebar-info", async (req, res) => {
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
   }
-});
-
-router.get("/get-professor-ids/:userId", async (req, res) => {
-  const userId = req.params.userId;
-  try {
-    const { data: professorArrayData, error: professorArrayError } =
-      await supabase
-        .from("User_Profiles")
-        .select("saved_professors")
-        .eq("user_id", userId)
-        .single();
-
-    if (professorArrayError) {
-      return res.status(400).json({
-        message: "Failed to Fetch",
-      });
-    }
-
-    return res.status(200).json(professorArrayData);
-  } catch {
-    return res.status(500).json({
-      message: "Internal Server Error. Please Try Again Later",
-    });
-  }
-});
-
-router.get("/get-applied-professor-ids/:userId", async (req, res) => {
-  const userId = req.params.userId;
-  try {
-    const { data: professorArrayData, error: professorArrayError } =
-      await supabase
-        .from("User_Profiles")
-        .select("applied_professors")
-        .eq("user_id", userId)
-        .single();
-
-    if (professorArrayError) {
-      return res.status(400).json({
-        message: "Failed to Fetch",
-      });
-    }
-
-    return res.status(200).json(professorArrayData);
-  } catch {
-    return res.status(500).json({
-      message: "Internal Server Error. Please Try Again Later",
-    });
-  }
-});
-
-router.post("/refresh-jwt", async (req, res) => {
-  const { refreshToken } = req.body;
-  try {
-  } catch {}
 });
 
 router.post("/verify-code", async (req, res) => {
