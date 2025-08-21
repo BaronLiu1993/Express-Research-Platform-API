@@ -151,7 +151,6 @@ router.get("/get-full-email-chain/:userId/:threadId", verifyToken, async (req, r
 
 
 
-//Get the Full Individual Email Chains
 router.get("/get-email-chain/:userId", async (req, res) => {
   const userId = req.user.sub
   const { data: completedData, error: completedFetchError } = await req.supabaseClient
@@ -249,10 +248,8 @@ router.get("/get-email-chain/:userId", async (req, res) => {
 
       threadArray.push(threadObject);
     }
-    console.log(threadArray)
     return res.status(200).json({ threadArray });
-  } catch (err) {
-    console.error("Gmail fetch error:", err);
+  } catch {
     return res.status(500).json({ message: "Failed to fetch Gmail threads." });
   }
 });

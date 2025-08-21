@@ -136,7 +136,8 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
 );
 
 router.get("/get-resume/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub;
+
   try {
     const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
       .from("User_Profiles")
@@ -144,13 +145,26 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
       .eq("user_id", userId)
       .single();
 
-    if (!tokenData || tokenFetchError) {
-      return res.status(401).json({ updated: false });
+    if (!tokenData || tokenFetchError || !tokenData.gmail_auth_token) {
+      return res.status(401).json({
+        success: false,
+        reauthRequired: true,
+      });
     }
+
     oauth2Client.setCredentials({
       access_token: tokenData.gmail_auth_token,
       refresh_token: tokenData.gmail_refresh_token,
     });
+
+    try {
+      await oauth2Client.getAccessToken(); 
+    } catch {
+      return res.status(401).json({
+        success: false,
+        reauthRequired: true,
+      });
+    }
 
     const { data: resumeData, error: resumeDataFetchError } = await req.supabaseClient
       .from("User_Profiles")
@@ -158,11 +172,13 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
       .eq("user_id", userId)
       .single();
 
-    if (resumeDataFetchError) {
-      return res
-        .status(200)
-        .json({ success: false, data: "Resume Fetch Error" });
+    if (resumeDataFetchError || !resumeData?.resume) {
+      return res.status(200).json({
+        success: false,
+        reauthRequired: false,
+      });
     }
+
     const drive = google.drive({ version: "v3", auth: oauth2Client });
     const fileId = resumeData.resume;
 
@@ -170,14 +186,16 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
       fileId,
       fields: "id, name, webViewLink, webContentLink",
     });
+
     return res.status(200).json({ success: true, data: response.data });
   } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
+
 router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
-  const { userId } = req.params;
+  const userId = req.user.sub
   try {
     const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
       .from("User_Profiles")

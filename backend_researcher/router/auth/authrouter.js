@@ -2,9 +2,9 @@ import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { google } from "googleapis";
 import { generateEmbeddings } from "../../services/authServices.js";
-import dotenv from "dotenv"
+import dotenv from "dotenv";
 
-dotenv.config()
+dotenv.config();
 
 const router = express.Router();
 
@@ -22,6 +22,28 @@ const scopes = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
+router.get("/signin-with-google", async (req, res) => {
+  const { data: callbackData, error: authError} = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: ''
+    }
+  })
+
+  if (callbackData.url) {
+    redirect(callbackData.url)
+  }
+})
+
+router.get("/oauth2callback", async (req, res) => {
+  const code = req.query.code
+  const next = req.query.next ?? "/"
+
+  if (code) {
+    const supa
+  }
+})
+
 router.get("/gmail-data/:userId", (req, res) => {
   const userId = req.params.userId;
   const authUrl = oauth2Client.generateAuthUrl({
@@ -37,29 +59,53 @@ router.get("/oauth2callback", async (req, res) => {
   const userId = req.query.state;
 
   if (!code || !userId) {
-    return res.status(400).send({ message: "Missing authorization code" });
+    return res.status(400).send({ message: "Missing authorization code or user ID" });
   }
 
   try {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
-    const { error: insertionError } = await supabase
+    const { data: userData, error: fetchError } = await supabase
       .from("User_Profiles")
-      .update({
-        gmail_auth_token: tokens.access_token,
-        gmail_refresh_token: tokens.refresh_token,
-      })
+      .select("gmail_refresh_token")
       .eq("user_id", userId)
-      .select()
       .single();
-    if (insertionError) {
-      return res.status(500).json({ message: "Insertion Error" });
+
+    if (fetchError) {
+      console.log(fetchError)
+      return res.status(500).send({ message: "Failed to fetch user data" });
+    }
+
+    const newData = {
+      gmail_auth_token: tokens.access_token,
+    };
+
+    if (tokens.refresh_token) {
+      newData.gmail_refresh_token = tokens.refresh_token;
+    } else if (userData?.gmail_refresh_token) {
+      newData.gmail_refresh_token = userData.gmail_refresh_token;
+    } else {
+      return res.redirect(
+        `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=${encodeURIComponent(
+          "https://www.googleapis.com/auth/drive.readonly"
+        )}&access_type=offline&prompt=consent&state=${userId}`
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("User_Profiles")
+      .update(newData)
+      .eq("user_id", userId)
+      .single();
+    if (updateError) {
+      return res.status(500).json({ message: "Failed to update tokens" });
     }
     res.redirect("http://localhost:3000/inbox/email");
-  } catch {
+  } catch (err) {
     res.status(500).send({ message: "Authentication failed" });
   }
 });
+
 
 //Registration Method
 router.post("/register", async (req, res) => {
@@ -81,7 +127,6 @@ router.post("/register", async (req, res) => {
       password: student_password,
     });
 
-    //Get all Student Data Necessary
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
     const userId = signUpData.user.id;
@@ -340,4 +385,4 @@ router.post("/verify-code", async (req, res) => {
   }
 });
 
-export default router
+export default router;
