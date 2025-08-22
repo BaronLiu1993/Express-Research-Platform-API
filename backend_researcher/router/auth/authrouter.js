@@ -8,7 +8,7 @@ dotenv.config();
 
 const router = express.Router();
 
-//Initialise Gmail oAuth Client
+//Initialise Gmail OAuth Client
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
@@ -28,7 +28,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:8080/auth/oauth2callback",
+          redirectTo: "http://localhost:3000/account",
           scopes: scopes.join(" "),
         },
       });
@@ -44,10 +44,9 @@ router.get("/signin-with-google", async (req, res) => {
   }
 });
 
-router.get("/oauth2callback", async (req, res) => {
-  const code = req.query.code;
-  const next = "/register";
-
+router.post("/oauth2callback", async (req, res) => {
+  const code = req.body.code;
+  
   if (!code) {
     return res.status(400).json({ message: "No code provided" });
   }
@@ -55,34 +54,37 @@ router.get("/oauth2callback", async (req, res) => {
   try {
     const { data: tokenData, error: tokenDataError } =
       await supabase.auth.exchangeCodeForSession(code);
+    
     if (tokenDataError || !tokenData.session) {
       return res
         .status(400)
         .json({ message: "Failed to exchange code for session" });
     }
 
-
     const { session, user } = tokenData;
 
-    res.cookie("access_token", session.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-    });
-    res.cookie("refresh_token", session.refresh_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-    });
-    res.cookie("user_id", user.id, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-    });
+    const { error: tokenInsertionError } = await supabase
+      .from("User_Profiles")
+      .insert({
+        user_id: user.id,
+        student_email: user.email,
+        student_name: user.user_metadata.full_name,
+        gmail_auth_token: session.provider_token,
+        gmail_refresh_token: session.provider_refresh_token,
+      });
 
-    res.redirect(next);
-  } catch (err) {
-    console.error(err);
+    if (tokenInsertionError) {
+      return res.status(400).json({ message: "Failed to Insert Data" });
+    }
+    
+    return res.status(200).json({ 
+      message: "Authentication successful", 
+      user_id: user.id,
+      access_token: session.access_token,
+      success: true
+    });
+    
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -151,25 +153,15 @@ router.get("/oauth2callback", async (req, res) => {
 });*/
 
 //Registration Method
-router.post("/register", async (req, res) => {
+router.post("/register-student-information", async (req, res) => {
   const {
-    student_email,
-    student_password,
     student_major,
-    student_firstname,
-    student_lastname,
     student_year,
     student_interests,
     student_acceptedterms,
-    student_motivation,
   } = req.body;
 
   try {
-    const { data: signUpData, error: authError } = await supabase.auth.signUp({
-      email: student_email,
-      password: student_password,
-    });
-
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
     const userId = signUpData.user.id;
@@ -182,16 +174,12 @@ router.post("/register", async (req, res) => {
     const { error: profileError } = await supabase
       .from("User_Profiles")
       .insert({
-        user_id: userId,
-        student_email: student_email,
         student_major: student_major,
-        student_firstname: student_firstname,
-        student_lastname: student_lastname,
+
         student_year: student_year,
         student_interests: student_interests,
         student_acceptedterms: student_acceptedterms,
         student_embeddings: embeddings.data[0].embedding,
-        student_motivation: student_motivation,
       });
 
     //Initialise Student Data
@@ -240,7 +228,7 @@ router.get("/get-user", async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "No Bearer token provided" });
+    return res.status(401).json({ message: "No Bearer token provided" });
   }
 
   const accessToken = authHeader.split(" ")[1];
@@ -264,52 +252,11 @@ router.get("/get-user", async (req, res) => {
       .single();
 
     if (profileError) {
-      return res.status(500).json({ error: profileError.message });
+      return res.status(500).json({ message: "Failed to Fetch Profile" });
     }
     return res.status(200).json({ profile });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Unexpected server error" });
-  }
-});
-
-//Get Just ID and Email
-router.get("/get-user-id-email", async (req, res) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "No Bearer token provided" });
-  }
-
-  const accessToken = authHeader.split(" ")[1];
-
-  try {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return res.status(401).json({ message: "Invalid user" });
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("User_Profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    if (profileError) {
-      return res.status(500).json({ message: "Failed to Fetch Profile" });
-    }
-
-    return res.status(200).json({
-      user_id: profile.user_id,
-      student_email: profile.student_email,
-      student_motivation: profile.student_motivation,
-    });
-  } catch (err) {
-    return res.status(500).json({ message: "Unexpected server error" });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
