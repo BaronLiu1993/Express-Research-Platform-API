@@ -23,27 +23,71 @@ const scopes = [
 ];
 
 router.get("/signin-with-google", async (req, res) => {
-  const { data: callbackData, error: authError} = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: ''
+  try {
+    const { data: callbackData, error: authError } =
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: "http://localhost:8080/auth/oauth2callback",
+          scopes: scopes.join(" "),
+        },
+      });
+    if (authError) {
+      return res.status(400).json({ message: "Authentication Error" });
     }
-  })
 
-  if (callbackData.url) {
-    redirect(callbackData.url)
+    if (callbackData.url) {
+      res.redirect(callbackData.url);
+    }
+  } catch (err) {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-})
+});
 
 router.get("/oauth2callback", async (req, res) => {
-  const code = req.query.code
-  const next = req.query.next ?? "/"
+  const code = req.query.code;
+  const next = "/register";
 
-  if (code) {
-    const supa
+  if (!code) {
+    return res.status(400).json({ message: "No code provided" });
   }
-})
 
+  try {
+    const { data: tokenData, error: tokenDataError } =
+      await supabase.auth.exchangeCodeForSession(code);
+    if (tokenDataError || !tokenData.session) {
+      return res
+        .status(400)
+        .json({ message: "Failed to exchange code for session" });
+    }
+
+
+    const { session, user } = tokenData;
+
+    res.cookie("access_token", session.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+    });
+    res.cookie("refresh_token", session.refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+    });
+    res.cookie("user_id", user.id, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+    });
+
+    res.redirect(next);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/* 
 router.get("/gmail-data/:userId", (req, res) => {
   const userId = req.params.userId;
   const authUrl = oauth2Client.generateAuthUrl({
@@ -104,8 +148,7 @@ router.get("/oauth2callback", async (req, res) => {
   } catch (err) {
     res.status(500).send({ message: "Authentication failed" });
   }
-});
-
+});*/
 
 //Registration Method
 router.post("/register", async (req, res) => {
