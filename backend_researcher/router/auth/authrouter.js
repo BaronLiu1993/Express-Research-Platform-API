@@ -108,6 +108,10 @@ router.post("/oauth2callback", async (req, res) => {
   }
 });
 
+router.get("/refresh-token", async (req, res) => {
+  
+})
+
 router.get("check-profile-completed", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   try {

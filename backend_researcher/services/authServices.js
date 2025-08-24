@@ -25,10 +25,10 @@ export async function generateEmbeddings(research_input_embeddings) {
   return embeddings;
 }
 
-export async function refreshToken() {}
-
+//Refresh In Here 
 export async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
+  
   if (!authHeader) {
     return res.status(401).json({ message: "Missing Authorization header" });
   }
@@ -38,10 +38,19 @@ export async function verifyToken(req, res, next) {
     return res.status(401).json({ message: "Missing token" });
   }
 
+  const user = await supabase.auth.getUser(token);
+
+  //Refresh The Token with Refresh Token
+  if (!user) {
+
+  }
+
   try {
     const payload = jwt.verify(token, SUPABASE_JWT_SECRET, {
       algorithms: [SUPABASE_JWT_ALGORITHM],
     });
+
+
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
