@@ -1,7 +1,10 @@
 import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { google } from "googleapis";
-import { generateEmbeddings } from "../../services/authServices.js";
+import {
+  generateEmbeddings,
+  verifyToken,
+} from "../../services/authServices.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -79,12 +82,18 @@ router.post("/oauth2callback", async (req, res) => {
         gmail_refresh_token: session.provider_refresh_token,
       });
 
-    if (tokenInsertionError.code == "23505") {
+    const { data, error } = await supabase
+      .from("User_Profiles")
+      .select("profile_completed")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!data.profile_completed) {
       return res.status(200).json({
         user_id: user.id,
         access_token: session.access_token,
         refresh_token: session.refresh_token,
-        redirectURL: "/repository",
+        redirectURL: "/register",
       });
     }
 
@@ -92,10 +101,33 @@ router.post("/oauth2callback", async (req, res) => {
       user_id: user.id,
       access_token: session.access_token,
       refresh_token: session.refresh_token,
-      redirectURL: "/register",
+      redirectURL: "/repository",
     });
   } catch {
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.get("check-profile-completed", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
+  try {
+    const { data: profileData, error: profileError } = await supabase
+      .from("User_Profiles")
+      .select("profile_completed")
+      .eq("user_id", userId)
+      .single();
+
+    if (!profileData) {
+      return res.status(200).json({ isComplete: false });
+    }
+
+    if (profileError) {
+      return res.status(400).json({ message: "Fetch Error" });
+    }
+
+    return res.status(200).json({ isComplete: true });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -208,7 +240,7 @@ router.get("/get-user", async (req, res) => {
 });
 
 //Get Enough Info for Sidebar
-router.get("/get-user-sidebar-info", async (req, res) => {
+router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
