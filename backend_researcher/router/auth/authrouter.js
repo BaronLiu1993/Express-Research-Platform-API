@@ -108,9 +108,60 @@ router.post("/oauth2callback", async (req, res) => {
   }
 });
 
-router.get("/refresh-token", async (req, res) => {
-  
-})
+router.post("/refresh-token", async (req, res) => {
+  const { refreshToken } = req.body;
+  try {
+    const { data: tokenData, error: tokenDataError } =
+      await supabase.auth.refreshSession({
+        refresh_token: refreshToken,
+      });
+
+    if (tokenDataError || !tokenData) {
+      return res
+        .status(401)
+        .json({ message: "Invalid or expired refresh token" });
+    }
+
+    return res.status(200).json({
+      accessToken: tokenData.session.access_token,
+      refreshToken: tokenData.session.refresh_token,
+    });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.get("/is-authenticated", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({ message: "Missing Authorization header" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Missing token" });
+    }
+
+    const { data: userData, error: userDataError } = supabase.auth.getUser();
+
+    if (userDataError || !userData) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Failed to Get User Data" });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: "Successfully Entered" });
+  } catch {
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
+  }
+});
 
 router.get("check-profile-completed", verifyToken, async (req, res) => {
   const userId = req.user.sub;
@@ -121,19 +172,24 @@ router.get("check-profile-completed", verifyToken, async (req, res) => {
       .eq("user_id", userId)
       .single();
 
-    if (!profileData) {
-      return res.status(200).json({ isComplete: false });
-    }
-
     if (profileError) {
       return res.status(400).json({ message: "Fetch Error" });
     }
 
-    return res.status(200).json({ isComplete: true });
+    return res.status(200).json({ isComplete: profileData.profile_completed });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+router.post("change-profile-completed", verifyToken, async (req, res) => {
+  const userId = req.user.sub; 
+  try {
+    
+  } catch {
+
+  }
+})
 
 //Registration Method
 router.post("/register-student-information", async (req, res) => {
