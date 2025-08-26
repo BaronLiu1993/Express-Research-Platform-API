@@ -81,29 +81,19 @@ router.post("/oauth2callback", async (req, res) => {
         gmail_auth_token: session.provider_token,
         gmail_refresh_token: session.provider_refresh_token,
       });
-
-    const { data, error } = await supabase
-      .from("User_Profiles")
-      .select("profile_completed")
-      .eq("user_id", user.id)
-      .single();
-
-    if (!data.profile_completed) {
-      return res.status(200).json({
-        user_id: user.id,
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        redirectURL: "/register",
-      });
+    
+    if (tokenInsertionError) {
+      return res.status(400).json({message: "Failed To Insert"})
     }
 
     return res.status(200).json({
       user_id: user.id,
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
       redirectURL: "/repository",
     });
-  } catch {
+  } catch (err) {
+    console.log(err)
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -132,6 +122,7 @@ router.post("/refresh-token", async (req, res) => {
 });
 
 router.get("/is-authenticated", async (req, res) => {
+  console.log("check auth")
   try {
     const authHeader = req.headers.authorization;
 
@@ -164,6 +155,7 @@ router.get("/is-authenticated", async (req, res) => {
 });
 
 router.get("check-profile-completed", verifyToken, async (req, res) => {
+  console.log("check profile")
   const userId = req.user.sub;
   try {
     const { data: profileData, error: profileError } = await supabase
