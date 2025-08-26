@@ -145,7 +145,7 @@ router.get("/is-authenticated", async (req, res) => {
       return res.status(401).json({ success: false, message: "Missing token" });
     }
 
-    const { data: userData, error: userDataError } = supabase.auth.getUser();
+    const { data: userData, error: userDataError } = supabase.auth.getUser(token);
 
     if (userDataError || !userData) {
       return res
@@ -185,7 +185,7 @@ router.get("check-profile-completed", verifyToken, async (req, res) => {
 router.post("change-profile-completed", verifyToken, async (req, res) => {
   const userId = req.user.sub; 
   try {
-    
+
   } catch {
 
   }
