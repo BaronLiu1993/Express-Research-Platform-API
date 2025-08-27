@@ -53,7 +53,40 @@ router.get("/signin-with-google", async (req, res) => {
   }
 });
 
-router.post("/oauth2callback", async (req, res) => {
+//login
+router.post("/oauth2callback/login", async (req, res) => {
+  const code = req.body.code;
+  if (!code) {
+    return res.status(400).json({ message: "No code provided" });
+  }
+
+  try {
+    const { data: tokenData, error: tokenDataError } =
+      await supabase.auth.exchangeCodeForSession(code);
+
+    if (tokenDataError || !tokenData.session) {
+      return res.status(400).json({
+        message: "Failed to exchange code for session",
+        redirectURL: "/login",
+      });
+    }
+
+    const { session, user } = tokenData;
+
+    return res.status(200).json({
+      user_id: user.id,
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      redirectURL: "/repository",
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+//Registration
+router.post("/oauth2callback/register", async (req, res) => {
   const code = req.body.code;
   if (!code) {
     return res.status(400).json({ message: "No code provided" });
@@ -71,7 +104,6 @@ router.post("/oauth2callback", async (req, res) => {
 
     const { session, user } = tokenData;
 
-    //make it so only that specific authenticated user can insert now
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
       .insert({
@@ -81,19 +113,19 @@ router.post("/oauth2callback", async (req, res) => {
         gmail_auth_token: session.provider_token,
         gmail_refresh_token: session.provider_refresh_token,
       });
-    
+
     if (tokenInsertionError) {
-      return res.status(400).json({message: "Failed To Insert"})
+      return res.status(400).json({ message: "User Already Exists" });
     }
 
     return res.status(200).json({
       user_id: user.id,
       accessToken: session.access_token,
       refreshToken: session.refresh_token,
-      redirectURL: "/repository",
+      redirectURL: "/register",
     });
   } catch (err) {
-    console.log(err)
+    console.log(err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -122,7 +154,7 @@ router.post("/refresh-token", async (req, res) => {
 });
 
 router.get("/is-authenticated", async (req, res) => {
-  console.log("check auth")
+  console.log("check auth");
   try {
     const authHeader = req.headers.authorization;
 
@@ -136,7 +168,8 @@ router.get("/is-authenticated", async (req, res) => {
       return res.status(401).json({ success: false, message: "Missing token" });
     }
 
-    const { data: userData, error: userDataError } = supabase.auth.getUser(token);
+    const { data: userData, error: userDataError } =
+      supabase.auth.getUser(token);
 
     if (userDataError || !userData) {
       return res
@@ -155,7 +188,7 @@ router.get("/is-authenticated", async (req, res) => {
 });
 
 router.get("check-profile-completed", verifyToken, async (req, res) => {
-  console.log("check profile")
+  console.log("check profile");
   const userId = req.user.sub;
   try {
     const { data: profileData, error: profileError } = await supabase
@@ -174,17 +207,8 @@ router.get("check-profile-completed", verifyToken, async (req, res) => {
   }
 });
 
-router.post("change-profile-completed", verifyToken, async (req, res) => {
-  const userId = req.user.sub; 
-  try {
-
-  } catch {
-
-  }
-})
-
 //Registration Method
-router.post("/register-student-information", async (req, res) => {
+router.post("/register/:userId", verifyToken, async (req, res) => {
   const {
     student_major,
     student_year,
@@ -192,10 +216,11 @@ router.post("/register-student-information", async (req, res) => {
     student_acceptedterms,
   } = req.body;
 
+  const userId = req.user.sub;
+
   try {
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
-    const userId = signUpData.user.id;
 
     if (authError) {
       return res.status(400).json({ message: "Failed to Register" });
@@ -204,54 +229,23 @@ router.post("/register-student-information", async (req, res) => {
     //Insert into User_Profiles
     const { error: profileError } = await supabase
       .from("User_Profiles")
-      .insert({
+      .upsert({
         student_major: student_major,
-
         student_year: student_year,
         student_interests: student_interests,
         student_acceptedterms: student_acceptedterms,
         student_embeddings: embeddings.data[0].embedding,
-      });
-
-    //Initialise Student Data
-    const { error: dataError } = await supabase
-      .from("Key_Performance_Indicators")
-      .insert({
-        user_id: userId,
-      });
+        profile_completed: true,
+      })
+      .eq("userId");
 
     if (profileError) {
-      await supabase.auth.admin.deleteUser(userId);
-      return res.status(400).json({ message: "Failed to Save User Data" });
+      return res.status(400).json({ message: "Failed To Insert," });
     }
 
-    return res.status(201).json({ message: "Sucessfully Registered" });
+    return res.status(201).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-//Login Method
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const { data: authData, error: authError } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-    if (authError || !authData.session) {
-      return res.status(400).json({ message: "Login failed" });
-    }
-
-    return res.status(200).json({
-      userId: authData.user.id,
-      access_token: authData.session.access_token,
-      refresh_token: authData.session.refresh_token,
-    });
-  } catch (error) {
-    return res.status(500).json({ message: "An error occurred" });
   }
 });
 
