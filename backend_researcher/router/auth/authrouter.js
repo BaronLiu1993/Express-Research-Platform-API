@@ -27,13 +27,39 @@ const scopes = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
+router.get("/signup-with-google", async (req, res) => {
+  try {
+    const { data: callbackData, error: authError } =
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: "http://localhost:3000/account/register",
+          scopes: scopes.join(" "),
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+    if (authError) {
+      return res.status(400).json({ message: "Authentication Error" });
+    }
+
+    if (callbackData.url) {
+      res.redirect(callbackData.url);
+    }
+  } catch (err) {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 router.get("/signin-with-google", async (req, res) => {
   try {
     const { data: callbackData, error: authError } =
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:3000/account",
+          redirectTo: "http://localhost:3000/account/register", //Change later
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -157,6 +183,7 @@ router.get("/is-authenticated", async (req, res) => {
   console.log("check auth");
   try {
     const authHeader = req.headers.authorization;
+    console.log(authHeader)
 
     if (!authHeader) {
       return res.status(401).json({ message: "Missing Authorization header" });
@@ -208,7 +235,8 @@ router.get("check-profile-completed", verifyToken, async (req, res) => {
 });
 
 //Registration Method
-router.post("/register/:userId", verifyToken, async (req, res) => {
+router.post("/register", verifyToken, async (req, res) => {
+  console.log("fired");
   const {
     student_major,
     student_year,
@@ -218,33 +246,43 @@ router.post("/register/:userId", verifyToken, async (req, res) => {
 
   const userId = req.user.sub;
 
+  console.log(userId)
+  if (
+    !student_major ||
+    !student_year ||
+    !student_interests ||
+    !student_acceptedterms ||
+    !userId
+  ) {
+    return res.status(400).json({ message: "Incomplete Information" });
+  }
+
   try {
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
 
-    if (authError) {
-      return res.status(400).json({ message: "Failed to Register" });
-    }
-
     //Insert into User_Profiles
     const { error: profileError } = await supabase
       .from("User_Profiles")
-      .upsert({
+      .update({
         student_major: student_major,
         student_year: student_year,
         student_interests: student_interests,
         student_acceptedterms: student_acceptedterms,
         student_embeddings: embeddings.data[0].embedding,
-        profile_completed: true,
+        finished_registration: true,
       })
-      .eq("userId");
+      .eq("user_id", userId)
+      .single();
 
     if (profileError) {
+      console.log(profileError)
       return res.status(400).json({ message: "Failed To Insert," });
     }
-
+    console.log("done")
     return res.status(201).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
+    console.log(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -259,15 +297,12 @@ router.get("/get-user", async (req, res) => {
   const accessToken = authHeader.split(" ")[1];
 
   try {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(accessToken);
+    const { data: userData, error: authError } = await supabase.auth.getUser(
+      accessToken
+    );
 
-    if (authError || !user) {
-      return res
-        .status(401)
-        .json({ error: authError?.message || "Invalid user" });
+    if (authError || !userData) {
+      return res.status(401).json({ message: "Invalid user" });
     }
 
     const { data: profile, error: profileError } = await supabase
