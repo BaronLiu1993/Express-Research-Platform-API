@@ -41,6 +41,9 @@ router.get("/signup-with-google", async (req, res) => {
           },
         },
       });
+
+    console.log(authError);
+    console.log(callbackData);
     if (authError) {
       return res.status(400).json({ message: "Authentication Error" });
     }
@@ -67,6 +70,8 @@ router.get("/signin-with-google", async (req, res) => {
           },
         },
       });
+    console.log(authError);
+    console.log(callbackData);
     if (authError) {
       return res.status(400).json({ message: "Authentication Error" });
     }
@@ -140,8 +145,11 @@ router.post("/oauth2callback/register", async (req, res) => {
         gmail_refresh_token: session.provider_refresh_token,
       });
 
+    //Duplicate Keys and this is where it fails and redirecs
     if (tokenInsertionError) {
-      return res.status(400).json({ message: "User Already Exists" });
+      return res
+        .status(400)
+        .json({ redirectURL: "/login", message: "User Already Exists" });
     }
 
     return res.status(200).json({
@@ -180,10 +188,8 @@ router.post("/refresh-token", async (req, res) => {
 });
 
 router.get("/is-authenticated", async (req, res) => {
-  console.log("check auth");
   try {
     const authHeader = req.headers.authorization;
-    console.log(authHeader)
 
     if (!authHeader) {
       return res.status(401).json({ message: "Missing Authorization header" });
@@ -195,10 +201,9 @@ router.get("/is-authenticated", async (req, res) => {
       return res.status(401).json({ success: false, message: "Missing token" });
     }
 
-    const { data: userData, error: userDataError } =
-      supabase.auth.getUser(token);
+    const { data } = await supabase.auth.getUser(token);
 
-    if (userDataError || !userData) {
+    if (!data.user) {
       return res
         .status(400)
         .json({ success: false, message: "Failed to Get User Data" });
@@ -214,21 +219,27 @@ router.get("/is-authenticated", async (req, res) => {
   }
 });
 
-router.get("check-profile-completed", verifyToken, async (req, res) => {
+router.get("/check-profile-completed", verifyToken, async (req, res) => {
   console.log("check profile");
   const userId = req.user.sub;
+
+  console.log(userId);
   try {
     const { data: profileData, error: profileError } = await supabase
       .from("User_Profiles")
-      .select("profile_completed")
+      .select("finished_registration")
       .eq("user_id", userId)
       .single();
 
+    console.log(profileData);
     if (profileError) {
+      console.log(profileError);
       return res.status(400).json({ message: "Fetch Error" });
     }
 
-    return res.status(200).json({ isComplete: profileData.profile_completed });
+    return res
+      .status(200)
+      .json({ isComplete: profileData.finished_registration });
   } catch {
     return res.status(500).json({ message: "Internal Server Error" });
   }
@@ -246,7 +257,7 @@ router.post("/register", verifyToken, async (req, res) => {
 
   const userId = req.user.sub;
 
-  console.log(userId)
+  console.log(userId);
   if (
     !student_major ||
     !student_year ||
@@ -276,10 +287,10 @@ router.post("/register", verifyToken, async (req, res) => {
       .single();
 
     if (profileError) {
-      console.log(profileError)
+      console.log(profileError);
       return res.status(400).json({ message: "Failed To Insert," });
     }
-    console.log("done")
+    console.log("done");
     return res.status(201).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
     console.log(err);
