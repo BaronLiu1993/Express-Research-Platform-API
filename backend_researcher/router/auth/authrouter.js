@@ -98,7 +98,7 @@ router.post("/oauth2callback/login", async (req, res) => {
     if (tokenDataError || !tokenData.session) {
       return res.status(400).json({
         message: "Failed to exchange code for session",
-        redirectURL: "/login",
+        redirectURL: "/auth/signin",
       });
     }
 
@@ -149,7 +149,7 @@ router.post("/oauth2callback/register", async (req, res) => {
     if (tokenInsertionError) {
       return res
         .status(400)
-        .json({ redirectURL: "/login", message: "User Already Exists" });
+        .json({ redirectURL: "/auth/signin", message: "User Already Exists" });
     }
 
     return res.status(200).json({
@@ -172,6 +172,7 @@ router.post("/refresh-token", async (req, res) => {
         refresh_token: refreshToken,
       });
 
+    console.log(tokenDataError);
     if (tokenDataError || !tokenData) {
       return res
         .status(401)
@@ -187,7 +188,27 @@ router.post("/refresh-token", async (req, res) => {
   }
 });
 
+router.post("/sign-out", async (req, res) => {
+  const { refreshToken } = req.body;
+
+  try {
+    const { error: signOutError } = await supabase.auth.admin.signOut(
+      refreshToken,
+      "global"
+    );
+
+    if (signOutError) {
+      return res.status(400).json({ message: "Failed To Sign Out" });
+    }
+
+    return res.status(200).json({ message: "Successfully Signed Out" });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 router.get("/is-authenticated", async (req, res) => {
+  console.log("fired");
   try {
     const authHeader = req.headers.authorization;
 
@@ -196,13 +217,13 @@ router.get("/is-authenticated", async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-
+    console.log(token);
     if (!token) {
       return res.status(401).json({ success: false, message: "Missing token" });
     }
 
     const { data } = await supabase.auth.getUser(token);
-
+    console.log(data);
     if (!data.user) {
       return res
         .status(400)
@@ -222,15 +243,15 @@ router.get("/is-authenticated", async (req, res) => {
 router.get("/check-profile-completed", verifyToken, async (req, res) => {
   console.log("check profile");
   const userId = req.user.sub;
+  console.log("userId from token:", req.user.sub);
 
   console.log(userId);
   try {
-    const { data: profileData, error: profileError } = await supabase
+    const { data: profileData, error: profileError } = await req.supabaseClient
       .from("User_Profiles")
       .select("finished_registration")
       .eq("user_id", userId)
       .single();
-
     console.log(profileData);
     if (profileError) {
       console.log(profileError);
@@ -291,7 +312,7 @@ router.post("/register", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Failed To Insert," });
     }
     console.log("done");
-    return res.status(201).json({ message: "Sucessfully Completed Profile" });
+    return res.status(200).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
     console.log(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -308,9 +329,8 @@ router.get("/get-user", async (req, res) => {
   const accessToken = authHeader.split(" ")[1];
 
   try {
-    const { data: userData, error: authError } = await supabase.auth.getUser(
-      accessToken
-    );
+    const { data: userData, error: authError } =
+      await req.supabaseClient.auth.getUser(accessToken);
 
     if (authError || !userData) {
       return res.status(401).json({ message: "Invalid user" });
@@ -351,43 +371,23 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
       return res.status(401).json({ message: "Invalid user" });
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await req.supabaseClient
       .from("User_Profiles")
-      .select("*")
+      .select("user_id, student_name, student_email")
       .eq("user_id", user.id)
       .single();
-
+    console.log(profile)
     if (profileError) {
       return res.status(500).json({ message: "Failed to Fetch Profile" });
     }
 
     return res.status(200).json({
       user_id: profile.user_id,
-      student_firstname: profile.student_firstname,
-      student_lastname: profile.student_lastname,
+      student_name: profile.student_name,
       student_email: profile.student_email,
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
-router.post("/verify-code", async (req, res) => {
-  const { email, code } = req.body;
-  try {
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "email",
-    });
-
-    if (error) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    return res.status(200).json({ session: data.session, user: data.user });
-  } catch (err) {
-    res.status(500).json({ message: "Internal server error" });
   }
 });
 
