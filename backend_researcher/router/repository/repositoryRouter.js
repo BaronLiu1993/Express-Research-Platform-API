@@ -16,31 +16,40 @@ const OPEN_AI = new OpenAI({
 
 const router = express.Router();
 
-router.get("/taishan/filter", verifyToken ,async (req, res) => {
-  const { page = 1, ...filters } = req.query;
+router.get("/taishan/filter", verifyToken, async (req, res) => {
+  const { page = 1, school, faculty, department } = req.query;
   const pageNumber = parseInt(page);
   const limit = 20;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;
 
   try {
-    let query = supabase
+    let query = req.supabaseClient
       .from("Taishan")
       .select(
         "id, name, url, school, department, faculty, bio, email, labs, lab_url, research_interests",
         { count: "exact" }
       );
 
-    for (const [key, rawValue] of Object.entries(filters)) {
-      if (key === "page") continue;
-      const values = Array.isArray(rawValue) ? rawValue : [rawValue];
-      const cleanValues = values.map((v) => v.trim()).filter(Boolean);
-      if (cleanValues.length > 0) {
-        query = query.in(key, cleanValues);
-      }
+    // Apply filters only if present
+    if (school) {
+      const values = Array.isArray(school) ? school : [school];
+      query = query.in("school", values.map((v) => v.trim()).filter(Boolean));
     }
 
+    if (faculty) {
+      const values = Array.isArray(faculty) ? faculty : [faculty];
+      query = query.in("faculty", values.map((v) => v.trim()).filter(Boolean));
+    }
+
+    if (department) {
+      const values = Array.isArray(department) ? department : [department];
+      query = query.in("department", values.map((v) => v.trim()).filter(Boolean));
+    }
+
+    // Pagination
     query = query.range(from, to);
+
     const { data: tableData, error } = await query;
 
     if (error) {
@@ -54,6 +63,7 @@ router.get("/taishan/filter", verifyToken ,async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 
 router.get("/taishan", verifyToken, async (req, res) => {
   const { page, search } = req.query;
@@ -85,7 +95,7 @@ router.get("/taishan", verifyToken, async (req, res) => {
       const embedding = embeddingResult.data[0].embedding;
 
       const { data: tableData, error: semanticSearchError } =
-        await supabase.rpc("find_similar_professors_by_vector", {
+        await req.supabaseClient.rpc("find_similar_professors_by_vector", {
           student_embedding: embedding,
           match_threshold: 0.2,
           page_size: limit,
@@ -111,7 +121,7 @@ router.get("/taishan", verifyToken, async (req, res) => {
       data: tableData,
       count: tableCount,
       error: tableFetchError,
-    } = await supabase
+    } = await req.supabaseClient
       .from("Taishan")
       .select(
         "id, name, url, school, department, faculty, bio, email, labs, lab_url, research_interests",
@@ -136,14 +146,12 @@ router.get("/match-professors", verifyToken, async (req, res) => {
   const match_threshold = 0.2;
 
   try {
-    const { data: matches, error: matchesFetchError } = await req.supabaseClient.rpc(
-      "match_professors_for_student",
-      {
+    const { data: matches, error: matchesFetchError } =
+      await req.supabaseClient.rpc("match_professors_for_student", {
         student_id: userId,
         match_threshold,
         match_count,
-      }
-    );
+      });
     if (matchesFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }

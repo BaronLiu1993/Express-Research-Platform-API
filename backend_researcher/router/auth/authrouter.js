@@ -62,7 +62,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:3000/account/register", //Change later
+          redirectTo: "http://localhost:3000/account/login", //Change later
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -376,7 +376,7 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
       .select("user_id, student_name, student_email")
       .eq("user_id", user.id)
       .single();
-    console.log(profile)
+    console.log(profile);
     if (profileError) {
       return res.status(500).json({ message: "Failed to Fetch Profile" });
     }

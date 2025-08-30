@@ -38,7 +38,6 @@ router.get("/kanban/get-saved/:userId", verifyToken, async (req, res) => {
 router.post("/kanban/add-saved/:userId/:professorId", verifyToken, async (req, res) => {
   const { professorId } = req.params;
   const userId = req.user.sub;
-s
   const {
     name,
     email,
@@ -69,6 +68,7 @@ s
         comments: comments,
       })
       .single();
+    console.log(savedInsertionError)
     if (savedInsertionError) {
       return res
         .status(400)

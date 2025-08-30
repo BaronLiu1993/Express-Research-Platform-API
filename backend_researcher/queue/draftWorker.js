@@ -27,7 +27,6 @@ export const draftWorker = new Worker(
     }
   );
   
-  // Worker event handlers for monitoring
   draftWorker.on('completed', (job, result) => {
     console.log(`✅ Job ${job.id} completed for professor ${job.data.professorId}`);
   });
