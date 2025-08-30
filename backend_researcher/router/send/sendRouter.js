@@ -36,7 +36,6 @@ router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
 router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-email-with-attachments",

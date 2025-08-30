@@ -21,6 +21,34 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
+async function getDriveFileBuffer(fileId, drive) {
+  const res = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" }
+  );
+  return Buffer.from(res.data);
+}
+
+function extractHtmlOrPlainText(payload) {
+  if (!payload) return null;
+
+  if (
+    (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
+    payload.body?.data
+  ) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+
+  if (payload.parts && Array.isArray(payload.parts)) {
+    for (const part of payload.parts) {
+      const result = getLatestReply(part);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
 function makeReplyBody(
   to,
   fromName,
@@ -51,44 +79,33 @@ function makeReplyBody(
     .replace(/=+$/, "");
 }
 
-async function getDriveFileBuffer(fileId, drive) {
-  const res = await drive.files.get(
-    { fileId, alt: "media" },
-    { responseType: "arraybuffer" }
-  );
-  return Buffer.from(res.data);
-}
+function makeBody({ to, userName, fromEmail, subject, html }) {
+  const mimeMessage = [
+    `Content-Type: text/html; charset="UTF-8"`,
+    `To: ${to}`,
+    `From: ${userName} <${fromEmail}>`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    ``,
+    `${html}`,
+  ].join("\n");
 
-function extractHtmlOrPlainText(payload) {
-  if (!payload) return null;
-
-  if (
-    (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
-    payload.body?.data
-  ) {
-    return Buffer.from(payload.body.data, "base64").toString("utf-8");
-  }
-
-  if (payload.parts && Array.isArray(payload.parts)) {
-    for (const part of payload.parts) {
-      const result = getLatestReply(part);
-      if (result) return result;
-    }
-  }
-
-  return null;
+  return Buffer.from(mimeMessage)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 function makeBodyWithAttachment({
   to,
-  from,
+  from, //Email
   name,
   subject,
   html,
   attachments,
 }) {
   const formattedFrom = name ? `"${name}" <${from}>` : from;
-  console.log(to, from, name, subject, html, attachments);
   const mail = new MailComposer({
     to,
     from: formattedFrom,
@@ -97,7 +114,6 @@ function makeBodyWithAttachment({
     text: "",
     attachments,
   });
-  console.log(mail);
 
   return new Promise((resolve, reject) => {
     mail.compile().build((err, message) => {
@@ -114,27 +130,38 @@ function makeBodyWithAttachment({
   });
 }
 
-function makeBody(to, userName, fromEmail, subject, htmlMessage) {
-  const mimeMessage = [
-    `Content-Type: text/html; charset="UTF-8"`,
-    `To: ${to}`,
-    `From: ${userName} <${fromEmail}>`,
-    `Subject: ${subject}`,
-    `MIME-Version: 1.0`,
-    ``,
-    `${htmlMessage}`,
-  ].join("\n");
+function makeReplyBodyWithAttachment({
+  to,
+  from,
+  name,
+  subject,
+  html,
+  attachments,
+}) {
+  const formattedFrom = name ? `"${name}" <${from}>` : from;
+  const mail = new MailComposer({
+    to,
+    from: formattedFrom,
+    subject,
+    html,
+    text: "",
+    attachments,
+  });
 
-  return Buffer.from(mimeMessage)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return new Promise((resolve, reject) => {
+    mail.compile().build((err, message) => {
+      if (err) return reject(err);
+
+      const encodedMessage = message
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      resolve(encodedMessage);
+    });
+  });
 }
-
-//buffer stream
-
-//Draft Generation
 
 export async function generateDraftFromSnippetEmail({
   userId,
@@ -212,11 +239,9 @@ export async function generateDraftFromSnippetEmail({
         .eq("user_id", userId)
         .eq("professor_id", professorId);
     }
-    console.log(insertionError);
 
     return { message: "Draft successfully created" };
   } catch (error) {
-    console.error("Draft creation failed:", error);
     return { message: "Failed to create draft" };
   }
 }
@@ -247,7 +272,6 @@ export async function sendSnippetEmail({ userId, userEmail, userName, body }) {
 
   //build tracking pixel
   const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
-
   const draft = await gmail.users.drafts.get({
     userId: "me",
     id: draftData.draft_id,
@@ -460,28 +484,12 @@ export async function generateFollowUpDraftSnippetEmail({
   body,
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
-  console.log("Starting draft generation with params:", {
-    userId,
-    professorId,
-    snippetId,
-    dynamicFields,
-    to,
-    fromName,
-    fromEmail,
-  });
-
   try {
-    // Fetch Gmail Tokens
     const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
-
-    if (tokenError || !tokenData) {
-      console.error("Failed to fetch Gmail tokens:", tokenError);
-      throw new Error("Missing Gmail tokens");
-    }
 
     const trackingId = uuidv4();
     oauth2Client.setCredentials({
@@ -490,7 +498,6 @@ export async function generateFollowUpDraftSnippetEmail({
     });
 
     await oauth2Client.getAccessToken();
-    console.log("OAuth2 access token refreshed");
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
@@ -502,17 +509,12 @@ export async function generateFollowUpDraftSnippetEmail({
       .eq("id", snippetId)
       .single();
 
-    if (snippetError || !snippetData) {
-      console.error("Failed to fetch snippet:", snippetError);
-      throw new Error("Snippet not found");
-    }
-
     const snippetHTML = snippetData.snippet_html;
     const snippetSubject = snippetData.snippet_subject;
 
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const html = Mustache.render(snippetHTML, dynamicFields);
-    const raw = makeBody(to, fromName, fromEmail, subject, html);
+    const raw = makeReplyBody(to, fromName, fromEmail, subject, html);
 
     // Create Gmail Draft
     const draft = await gmail.users.drafts.create({
@@ -531,13 +533,6 @@ export async function generateFollowUpDraftSnippetEmail({
       },
     ]);
 
-    if (insertionError) {
-      console.error("Failed to insert draft metadata:", insertionError);
-      throw new Error("Supabase insert failed");
-    }
-
-    console.log("Draft metadata inserted into Supabase");
-
     return { message: "Draft successfully created" };
   } catch (err) {
     return { message: "Failed to create draft" };
@@ -546,11 +541,14 @@ export async function generateFollowUpDraftSnippetEmail({
 
 //Sending Function
 
-export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
-  console.log("Starting sendFollowUpEmail with:", { body });
-  console.log(userId);
+export async function sendFollowUpEmail({
+  userId,
+  userEmail,
+  userName,
+  body,
+  threadId,
+}) {
   try {
-    // Fetch Gmail Tokens
     const { data: tokenData, error: tokenFetchError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
@@ -563,10 +561,6 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
     });
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-    // Fetch corresponding draft
-    console.log(body.professorId);
-    console.log(userId);
 
     let draftData = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -582,10 +576,10 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
       draftFetchError = error;
 
       if (!error && data) {
-        break; 
+        break;
       } else {
         if (attempt < 2) {
-          await new Promise((res) => setTimeout(res, 500)); 
+          await new Promise((res) => setTimeout(res, 500));
         }
       }
     }
@@ -605,7 +599,7 @@ export async function sendFollowUpEmail({ userId, userEmail, userName, body }) {
 
     console.log(userName);
 
-    const raw = makeBody(
+    const raw = makeReplyBody(
       body.professorEmail,
       userName,
       userEmail,
@@ -657,19 +651,12 @@ export async function sendFollowUpWithAttachments({
   userName,
   body,
 }) {
-  console.log("🚀 sendFollowUpWithAttachments START", { userId, body });
-
-  // 1️⃣ Get Gmail OAuth tokens
   const { data: tokenData, error: tokenFetchError } = await supabase
     .from("User_Profiles")
     .select("gmail_auth_token, gmail_refresh_token")
     .eq("user_id", userId)
     .single();
-  if (tokenFetchError || !tokenData) {
-    return { error: "Missing Gmail tokens" };
-  }
-  console.log("✅ Gmail tokens fetched");
-  
+
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
@@ -679,6 +666,7 @@ export async function sendFollowUpWithAttachments({
   const drive = google.drive({ version: "v3", auth: oauth2Client });
   const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
+  //Retry
   let draftData = null;
   let draftFetchError = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -704,12 +692,11 @@ export async function sendFollowUpWithAttachments({
     return { error: "No draft found" };
   }
 
-
   const draft = await gmail.users.drafts.get({
     userId: "me",
     id: draftData.draft_id,
   });
- 
+
   const { data: fileData, error: fileDataError } = await supabase
     .from("User_Profiles")
     .select("resume, transcript")
@@ -748,7 +735,6 @@ export async function sendFollowUpWithAttachments({
     console.log("✅ Transcript added:", metadata.data.name);
   }
 
-  // 6️⃣ Prepare email body
   const payload = draft.data.message.payload;
   const headers = payload.headers || [];
   const subject = headers.find((h) => h.name === "Subject")?.value || "";
@@ -784,7 +770,7 @@ export async function sendFollowUpWithAttachments({
       thread_id: sendResponse.data.threadId,
     })
     .eq("draft_id", draftData.draft_id);
- 
+
   const { data: inProgressData } = await supabase
     .from("InProgress")
     .select("*")
