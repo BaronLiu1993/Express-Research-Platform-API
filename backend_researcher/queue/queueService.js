@@ -604,7 +604,8 @@ export async function sendFollowUpEmail({
       userName,
       userEmail,
       subject,
-      finalHtmlBody
+      finalHtmlBody,
+      threadId
     );
 
     await gmail.users.drafts.update({

@@ -2,6 +2,7 @@ import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { google } from "googleapis";
 import {
+  encryptToken,
   generateEmbeddings,
   verifyToken,
 } from "../../services/authServices.js";
@@ -141,8 +142,8 @@ router.post("/oauth2callback/register", async (req, res) => {
         user_id: user.id,
         student_email: user.email,
         student_name: user.user_metadata.full_name,
-        gmail_auth_token: session.provider_token,
-        gmail_refresh_token: session.provider_refresh_token,
+        gmail_auth_token: encryptToken(session.provider_token),
+        gmail_refresh_token: encryptToken(session.provider_refresh_token),
       });
 
     //Duplicate Keys and this is where it fails and redirecs

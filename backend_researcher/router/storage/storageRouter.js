@@ -42,7 +42,7 @@ router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.sing
     bufferStream.push(null);
 
     try {
-      const { data: tokenData, error: tokenFetchError } = await supabase
+      const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
         .from("User_Profiles")
         .select("gmail_auth_token, gmail_refresh_token")
         .eq("user_id", userId)
@@ -78,6 +78,7 @@ router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.sing
       }
       return res.status(200).json({ message: "Successfully Inserted" });
     } catch (err) {
+      console.log(err)
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
@@ -108,6 +109,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
         access_token: tokenData.gmail_auth_token,
         refresh_token: tokenData.gmail_refresh_token,
       });
+      
       const drive = google.drive({ version: "v3", auth: oauth2Client });
       const response = await drive.files.create({
         requestBody: {
@@ -130,6 +132,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
       }
       return res.status(200).json({ message: "Successfully Inserted" });
     } catch (err) {
+      console.log(err)
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }

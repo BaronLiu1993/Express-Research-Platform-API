@@ -20,6 +20,7 @@
     "bullmq": "^5.53.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "crypto-js": "^3.1.9-1",
     "dotenv": "^16.5.0",
     "email-reply-parser": "^2.0.1",
     "express": "^5.1.0",

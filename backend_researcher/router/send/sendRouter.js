@@ -104,7 +104,6 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
     await draftQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
-    console.log(err);
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
@@ -138,7 +137,6 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
 router.post("/mass-send", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
