@@ -2,13 +2,15 @@ import { Worker } from "bullmq";
 import { generateDraftFromSnippetEmail } from "./queueService.js";
 import { Connection } from "../redis/redis.js";
 
+
+
 export const draftWorker = new Worker(
     'generate-draft',
     async (job) => {
-      const { userId, professorId, body } = job.data;
+      const { userId, professorId, body, accessToken } = job.data;
       try {
         
-        const result = await generateDraftFromSnippetEmail({ userId, professorId, body });
+        const result = await generateDraftFromSnippetEmail({ userId, professorId, body, accessToken });
         
         console.log(`Email Created Sucessfully for professor ${professorId}`);
         return result;

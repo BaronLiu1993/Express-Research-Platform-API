@@ -7,6 +7,7 @@ router.get(
   "/repository/get-all-appliedId/:userId",
   verifyToken,
   async (req, res) => {
+    console.log("fired")
     const userId = req.user.sub;
     try {
       const { data: professorIdData, error: professorIdFetchError } =

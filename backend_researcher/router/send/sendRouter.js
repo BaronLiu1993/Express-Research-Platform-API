@@ -31,6 +31,7 @@ router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
     await followUpDraftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
+    console.log(err)
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
@@ -40,7 +41,6 @@ router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res
   const userId = req.user.sub;
   const supabaseClient = req.supabaseClient
 
-  
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-email-with-attachments",
@@ -95,15 +95,14 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
 router.post("/snippet-create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
-  const supabaseClient = req.supabaseClient
-
+  console.log(req.token)
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
       data: {
         userId,
         professorId: professor.id,
-        supabase: supabaseClient,
+        accessToken: req.token,
         body: {
           ...baseBody,
           dynamicFields: professor.dynamicFields,
@@ -112,7 +111,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
       },
     }));
     await draftQueue.addBulk(jobs);
-    res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
+    res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }

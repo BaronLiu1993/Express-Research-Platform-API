@@ -64,7 +64,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:3000/account/login", //Change later
+          redirectTo: "http://localhost:3000/account/login", 
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",

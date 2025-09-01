@@ -15,7 +15,6 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 const secretKey = process.env.GMAIL_SECRET_KEY
-const algorithm = process.env.GMAIL_ALGORITHM
 
 const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,

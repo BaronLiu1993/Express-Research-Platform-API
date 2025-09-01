@@ -6,8 +6,12 @@ import { decryptToken } from "../services/authServices.js";
 import { makeReplyBody } from "../services/googleServices.js";
 import { makeBody } from "../services/googleServices.js";
 import { extractHtmlOrPlainText } from "../services/googleServices.js";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 //Gmail OAuth, Getting User Data
 const oauth2Client = new google.auth.OAuth2(
@@ -51,35 +55,63 @@ export async function generateDraftFromSnippetEmail({
   userId,
   professorId,
   body,
-  supabase, //From Verify Token
+  accessToken, // From Verify Token
 }) {
+  console.log("generateDraftFromSnippetEmail called", { userId, professorId, body });
+  
   const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
   const trackingId = uuidv4();
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+
   try {
-    // Fetch Gmail Tokens
+    // 1️⃣ Fetch Gmail Tokens
+    console.log("Fetching Gmail OAuth for user", userId);
     const gmail = await configureOAuth(userId, supabase);
-    // Fetch Snippet
+    console.log("Gmail configured", gmail?.users ? "ok" : "failed");
+
+    // 2️⃣ Fetch Snippet
+    console.log("Fetching snippet", snippetId);
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
       .select("*")
       .eq("user_id", userId)
-      .eq("id", snippetId)
+      .eq("id", snippetId.snippetId)
       .single();
+
+    if (snippetError) {
+      console.error("Error fetching snippet:", snippetError);
+      return { message: "Failed fetching snippet" };
+    }
+    console.log("Snippet fetched:", snippetData);
 
     const snippetHTML = snippetData.snippet_html;
     const snippetSubject = snippetData.snippet_subject;
 
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const html = Mustache.render(snippetHTML, dynamicFields);
+
+    console.log("Rendering email body", { subject, html });
+
     const raw = makeBody(to, fromName, fromEmail, subject, html);
 
-    // Create Gmail Draft
+    // 3️⃣ Create Gmail Draft
+    console.log("Creating Gmail draft for", to);
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw } },
     });
+    console.log("Draft created:", draft.data?.id);
 
-    const { error: insertionError } = await supabase.from("Emails").insert([
+    // 4️⃣ Insert into Emails table
+    console.log("Inserting draft record into Emails table");
+    const { data: emailData, error: insertionError } = await supabase.from("Emails").insert([
       {
         user_id: userId,
         professor_id: parseInt(professorId),
@@ -89,29 +121,41 @@ export async function generateDraftFromSnippetEmail({
         tracking_id: trackingId,
       },
     ]);
+    if (insertionError) {
+      console.error("Error inserting email:", insertionError);
+      return { message: "Failed inserting email" };
+    }
+    console.log("Email record inserted:", emailData);
 
-    //move from saved to inprogress now
-    const { data: savedData } = await supabase
+    // 5️⃣ Move from Saved → InProgress
+    console.log("Checking saved data for user/professor", userId, professorId);
+    const { data: savedData, error: savedError } = await supabase
       .from("Saved")
       .select("*")
       .eq("user_id", userId)
       .eq("professor_id", professorId)
       .single();
 
-    if (savedData) {
+    if (savedError) {
+      console.log("No saved data found, skipping move to InProgress");
+    } else {
+      console.log("Moving savedData to InProgress", savedData);
       await supabase.from("InProgress").insert(savedData);
       await supabase
         .from("Saved")
         .delete()
         .eq("user_id", userId)
         .eq("professor_id", professorId);
+      console.log("Move complete");
     }
 
     return { message: "Draft successfully created" };
-  } catch {
-    return { message: "Failed to create draft" };
+  } catch (err) {
+    console.error("Error in generateDraftFromSnippetEmail:", err);
+    return { message: "Failed to create draft", error: err.message || err };
   }
 }
+
 
 //Sending Function For First Initial Email
 export async function sendSnippetEmail({
@@ -483,7 +527,6 @@ export async function sendFollowUpWithAttachments({
       .select("resume, transcript")
       .eq("user_id", userId)
       .single();
-  
 
     let emailAttachments = [];
     if (fileData.resume) {
