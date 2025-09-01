@@ -1,64 +1,14 @@
-export function makeReplyBody(
-  to,
-  fromName,
-  fromEmail,
-  subject,
-  htmlMessage,
-  inReplyToMessageId = null
-) {
-  const headers = [
-    `To: ${to}`,
-    `From: ${fromName} <${fromEmail}>`,
-    `Subject: ${subject}`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `MIME-Version: 1.0`,
-  ];
+import MailComposer from "nodemailer/lib/mail-composer/index.js";
 
-  if (inReplyToMessageId) {
-    headers.push(`In-Reply-To: ${inReplyToMessageId}`);
-    headers.push(`References: ${inReplyToMessageId}`);
-  }
-
-  const mimeMessage = [...headers, "", htmlMessage].join("\n");
-
-  return Buffer.from(mimeMessage)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+export async function getDriveFileBuffer(fileId, drive) {
+  const res = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" }
+  );
+  return Buffer.from(res.data);
 }
 
-export function makeBody(to, fromName, fromEmail, subject, htmlMessage) {
-  const mimeMessage = [
-    `To: ${to}`,
-    `From: ${fromName} <${fromEmail}>`,
-    `Subject: ${subject}`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `MIME-Version: 1.0`,
-    ``,
-    `${htmlMessage}`,
-  ].join("\n");
-
-  //Encode
-  return Buffer.from(mimeMessage)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-export function decodeBody(encoded) {
-  let padded = encoded;
-  while (padded.length % 4 !== 0) {
-    padded += "=";
-  }
-  padded = padded.replace(/-/g, "+").replace(/_/g, "/");
-  const buffer = Buffer.from(padded, "base64");
-  return buffer.toString("utf-8");
-}
-
-export function extractHtmlOrPlainText(payload) {
-  if (!payload) return null;
+export async function extractHtmlOrPlainText(payload) {
 
   if (
     (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
@@ -76,3 +26,90 @@ export function extractHtmlOrPlainText(payload) {
 
   return null;
 }
+
+export function makeReplyBody({
+  to,
+  from,
+  name,
+  subject,
+  html,
+  inReplyToMessageId,
+  attachments = [],
+}) {
+  const formattedFrom = name ? `"${name}" <${from}>` : from;
+
+  const headers = {};
+  if (inReplyToMessageId) {
+    headers["In-Reply-To"] = inReplyToMessageId;
+    headers["References"] = inReplyToMessageId;
+  }
+
+  const mail = new MailComposer({
+    to,
+    from: formattedFrom,
+    subject,
+    html,
+    text: "",
+    attachments,
+    headers,
+  });
+
+  return new Promise((resolve, reject) => {
+    mail.compile().build((err, message) => {
+      if (err) return reject(err);
+
+      const encodedMessage = message
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      resolve(encodedMessage);
+    });
+  });
+}
+
+export function makeBody({
+  to,
+  from,
+  name,
+  subject,
+  html,
+  attachments = [],
+}) {
+  const formattedFrom = name ? `"${name}" <${from}>` : from;
+
+  const mail = new MailComposer({
+    to,
+    from: formattedFrom,
+    subject,
+    html,
+    text: "",
+    attachments,
+  });
+
+  return new Promise((resolve, reject) => {
+    mail.compile().build((err, message) => {
+      if (err) return reject(err);
+
+      const encodedMessage = message
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      resolve(encodedMessage);
+    });
+  });
+}
+
+export function decodeBody(encoded) {
+  let padded = encoded;
+  while (padded.length % 4 !== 0) {
+    padded += "=";
+  }
+  padded = padded.replace(/-/g, "+").replace(/_/g, "/");
+  const buffer = Buffer.from(padded, "base64");
+  return buffer.toString("utf-8");
+}
+

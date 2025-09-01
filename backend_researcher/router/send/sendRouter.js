@@ -12,6 +12,7 @@ const router = express.Router();
 router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
+  const supabaseClient = req.supabaseClient
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -24,6 +25,7 @@ router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
           dynamicFields: professor.dynamicFields,
           to: professor.email,
         },
+        supabase: supabaseClient
       },
     }));
     await followUpDraftQueue.addBulk(jobs);
@@ -36,6 +38,9 @@ router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
 router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
+  const supabaseClient = req.supabaseClient
+
+  
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-email-with-attachments",
@@ -43,6 +48,7 @@ router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res
         userId,
         userEmail,
         userName,
+        supabase: supabaseClient,
         body: {
           professorId: professor.professor_id,
           professorEmail: professor.email,
@@ -60,6 +66,7 @@ router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res
 router.post("/mass-send-followup", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
+  const supabaseClient = req.supabaseClient
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -68,6 +75,7 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
         userId,
         userEmail,
         userName,
+        supabase: supabaseClient,
         body: {
           professorId: professor.professor_id,
           professorEmail: professor.email,
@@ -87,6 +95,7 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
 router.post("/snippet-create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
+  const supabaseClient = req.supabaseClient
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -94,6 +103,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
       data: {
         userId,
         professorId: professor.id,
+        supabase: supabaseClient,
         body: {
           ...baseBody,
           dynamicFields: professor.dynamicFields,
@@ -111,6 +121,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
 router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
+  const supabaseClient = req.supabaseClient;
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -119,6 +130,7 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
         userId,
         userEmail,
         userName,
+        supabase: supabaseClient,
         body: {
           professorId: professor.id,
           professorEmail: professor.email,
@@ -126,7 +138,6 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
         },
       },
     }));
-    console.log(jobs)
     await sendWithAttachmentsQueue.addBulk(jobs);
     res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {
@@ -137,6 +148,7 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
 router.post("/mass-send", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
+  const supabaseClient = req.supabaseClient
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
@@ -144,6 +156,7 @@ router.post("/mass-send", verifyToken, async (req, res) => {
         userId,
         userEmail,
         userName,
+        supabase: supabaseClient,
         body: {
           professorId: professor.id,
           professorEmail: professor.email,

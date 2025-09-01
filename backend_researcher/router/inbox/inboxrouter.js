@@ -19,28 +19,6 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-router.get("/get-engagement/:threadId/:messageId", verifyToken, async (req, res) => {
-  const { threadId, messageId } = req.params;
-  try {
-    const { data: messageData, error: messageDataError } = await req.supabaseClient
-      .from("Messages")
-      .select("opened, opened_at")
-      .eq("thread_id", threadId)
-      .eq("message_id", messageId)
-      .single();
-
-    if (messageDataError) {
-      return res.status(400).json({ opened: false, opened_at: "Not Opened" });
-    }
-
-    return res
-      .status(200)
-      .json({ opened: messageData.opened, opened_at: messageData.opened_at });
-  } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
 router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
   const { threadId, messageId } = req.params;
   try {
@@ -63,27 +41,6 @@ router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
-router.get("/get-status/:userId/:professorId", verifyToken, async (req, res) => {
-  const { userId, professorId } = req.params;
-  try {
-    const { data: messageData, error: messageDataError } = await req.supabaseClient
-      .from("Completed")
-      .select("status")
-      .eq("user_id", userId)
-      .eq("professor_id", professorId)
-      .single();
-
-    if (messageDataError) {
-      return res.status(400).json({ message: "Failed to Fetch" });
-    }
-    const data = messageData.status;
-    return res.status(200).json({ data });
-  } catch {
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
-
 
 router.get("/get-full-email-chain/:userId/:threadId", verifyToken, async (req, res) => {
   const { threadId } = req.params;
