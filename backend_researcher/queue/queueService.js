@@ -4,8 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import Mustache from "mustache";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
-
-//Test only
+import { decryptToken } from "../services/authServices";
 
 dotenv.config();
 
@@ -104,6 +103,7 @@ function makeBodyWithAttachment({
   subject,
   html,
   attachments,
+  threadId
 }) {
   const formattedFrom = name ? `"${name}" <${from}>` : from;
   const mail = new MailComposer({
@@ -177,8 +177,6 @@ export async function generateDraftFromSnippetEmail({
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
-
-    if (tokenError || !tokenData) throw new Error("Missing Gmail tokens");
 
     oauth2Client.setCredentials({
       access_token: tokenData.gmail_auth_token,
@@ -336,7 +334,7 @@ export async function sendSnippetEmail({ userId, userEmail, userName, body }) {
     thread_id: sendResponse.data.threadId,
     message_id: sendResponse.data.id,
     tracking_id: draftData.tracking_id,
-    type: "First",
+    type: "first",
   });
 
   return { message: "Successfully Sent!" };
@@ -355,6 +353,7 @@ export async function sendSnippetEmailWithAttachments({
     .single();
 
   const oauth2Client = new google.auth.OAuth2();
+
   oauth2Client.setCredentials({
     access_token: tokenData.gmail_auth_token,
     refresh_token: tokenData.gmail_refresh_token,
@@ -490,14 +489,18 @@ export async function generateFollowUpDraftSnippetEmail({
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
+    const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token)
+    const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token)
 
     const trackingId = uuidv4();
     oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
+      access_token: decryptedAccessToken,
+      refresh_token: decryptedRefreshToken,
     });
 
     await oauth2Client.getAccessToken();
+    await oauth2Client.refreshAccessToken;
+    //seeing if it is right
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
@@ -743,7 +746,7 @@ export async function sendFollowUpWithAttachments({
   const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
   const finalHtmlBody = htmlBody + trackingPixel;
 
-  const raw = await makeBodyWithAttachment({
+  const raw = await makeReplyBodyWithAttachment({
     to: body.professorEmail,
     name: userName,
     from: userEmail,

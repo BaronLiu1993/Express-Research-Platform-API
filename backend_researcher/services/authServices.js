@@ -21,6 +21,7 @@ const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
 });
 
+//Encrypt Into Database
 export function encryptToken(token) {
   try {
     const encryptedToken = CryptoJS.AES.encrypt(token, secretKey).toString()
@@ -30,6 +31,7 @@ export function encryptToken(token) {
   }
 }
 
+//Decrypt When Making Function Calls
 export function decryptToken(token) {
   try {
     const decryptedToken = CryptoJS.AES.decrypt(token, secretKey).toString()
@@ -40,14 +42,26 @@ export function decryptToken(token) {
 }
 
 export async function refreshGmailTokens(refresh_token) {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    }, 
-  })
-  const data = await res.json()
-  return data.access_token
+  if (!refresh_token) {
+    throw new Error("No Token Found")
+  }
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      }, 
+      body: JSON.stringify(refresh_token)
+    })
+
+    if (!res.ok) {
+      throw new Error("Failed To ")
+    }
+    const data = await res.json(refresh_token)
+    return data.access_token
+  } catch {
+    throw new Error("Internal Server Error")
+  }
 }
 export async function generateEmbeddings(research_input_embeddings) {
   const embeddings = await OPEN_AI.embeddings.create({

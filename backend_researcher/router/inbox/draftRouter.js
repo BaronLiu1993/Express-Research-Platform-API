@@ -1,4 +1,3 @@
-import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { google } from "googleapis";
 import { extractHtmlOrPlainText } from "../../services/googleServices.js";
@@ -410,7 +409,7 @@ router.post(
       }
 
       return res.status(200).json({ draftId: draft.data.id });
-    } catch (error) {
+    } catch {
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
@@ -421,6 +420,7 @@ router.post(
 router.get("/resume-draft/:draftId/:userId", verifyToken, async (req, res) => {
   const { draftId } = req.params;
   const userId = req.user.sub;
+
   if (!draftId) {
     return res.status(200).json({
       draftExists: false,

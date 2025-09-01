@@ -2,6 +2,7 @@ import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { google } from "googleapis";
 import {
+  decryptToken,
   encryptToken,
   generateEmbeddings,
   verifyToken,
@@ -146,7 +147,7 @@ router.post("/oauth2callback/register", async (req, res) => {
         gmail_refresh_token: encryptToken(session.provider_refresh_token),
       });
 
-    //Duplicate Keys and this is where it fails and redirecs
+    //Duplicate Keys and this is where it fails and redirects
     if (tokenInsertionError) {
       return res
         .status(400)
