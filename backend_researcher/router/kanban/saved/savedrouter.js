@@ -77,6 +77,7 @@ router.post("/kanban/add-saved/:userId/:professorId", verifyToken, async (req, r
 
     return res.status(200).json({ message: "Professor saved successfully." });
   } catch (err) {
+    console.log(err)
     return res.status(500).json({ message: "An unexpected error occurred." });
   }
 });

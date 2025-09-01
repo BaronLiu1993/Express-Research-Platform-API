@@ -2,10 +2,10 @@ import { google } from "googleapis";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import Mustache from "mustache";
-import { decryptToken } from "../services/authServices";
-import { makeReplyBody } from "../services/googleServices";
-import { makeBody } from "../services/googleServices";
-import { extractHtmlOrPlainText } from "../services/googleServices";
+import { decryptToken } from "../services/authServices.js";
+import { makeReplyBody } from "../services/googleServices.js";
+import { makeBody } from "../services/googleServices.js";
+import { extractHtmlOrPlainText } from "../services/googleServices.js";
 
 dotenv.config();
 
