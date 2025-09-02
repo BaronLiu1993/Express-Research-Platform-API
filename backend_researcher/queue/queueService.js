@@ -7,6 +7,7 @@ import { makeReplyBody } from "../services/googleServices.js";
 import { makeBody } from "../services/googleServices.js";
 import { extractHtmlOrPlainText } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
+import { encryptToken } from "../services/authServices.js";
 
 dotenv.config();
 
@@ -20,35 +21,57 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-async function configureOAuth(userId, supabase, fetchDrive = false) {
+export async function getGoogleClient({ refreshToken, accessToken, userId, supabase }) {
+  const decryptedAccessToken = decryptToken(accessToken);
+  const decryptedRefreshToken = decryptToken(refreshToken);
+
+  oauth2Client.setCredentials({
+    access_token: decryptedAccessToken,
+    refresh_token: decryptedRefreshToken,
+  });
+
   try {
-    const { data: tokenData, error: tokenError } = await supabase
+    const { credentials } = await oauth2Client.refreshAccessToken(); 
+    const newAccessToken = credentials.access_token;
+    const newRefreshToken = credentials.refresh_token || decryptedRefreshToken;
+    // Update Supabase
+    const { error } = await supabase
       .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
+      .update({
+        gmail_auth_token: encryptToken(newAccessToken),
+        gmail_refresh_token: encryptToken(newRefreshToken),
+      })
       .eq("user_id", userId)
       .single();
 
-    const decrytedAccessTokens = decryptToken(tokenData.gmail_auth_token);
-    const decrytedRefreshTokens = decryptToken(tokenData.gmail_refresh_token);
-
-    oauth2Client.setCredentials({
-      access_token: decrytedAccessTokens,
-      refresh_token: decrytedRefreshTokens,
-    });
-
-    await oauth2Client.getAccessToken();
-
-    if (fetchDrive) {
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const drive = google.drive({ version: "v3", auth: oauth2Client });
-      return { gmail, drive };
-    }
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    return gmail;
-  } catch {
-    throw new Error("Internal Server Error");
+  } catch (err) {
+    throw err; // propagate so retry logic can handle
   }
+
+  return oauth2Client;
+}
+
+export async function configureGoogleClients(userId, supabase, fetchDrive = false) {
+  // Get tokens from Supabase
+  const { data: tokenData, error: tokenDataError } = await supabase
+    .from("User_Profiles")
+    .select("gmail_auth_token, gmail_refresh_token")
+    .eq("user_id", userId)
+    .single();
+
+  const client = await getGoogleClient({
+    accessToken: tokenData.gmail_auth_token,
+    refreshToken: tokenData.gmail_refresh_token,
+    userId,
+    supabase,
+  });
+
+  const gmail = google.gmail({ version: "v1", auth: client });
+  if (fetchDrive) {
+    const drive = google.drive({ version: "v3", auth: client });
+    return { gmail, drive };
+  }
+  return gmail;
 }
 
 export async function generateDraftFromSnippetEmail({
@@ -57,8 +80,7 @@ export async function generateDraftFromSnippetEmail({
   body,
   accessToken, // From Verify Token
 }) {
-  console.log("generateDraftFromSnippetEmail called", { userId, professorId, body });
-  
+
   const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
   const trackingId = uuidv4();
 
@@ -71,10 +93,7 @@ export async function generateDraftFromSnippetEmail({
   });
 
   try {
-    // 1️⃣ Fetch Gmail Tokens
-    console.log("Fetching Gmail OAuth for user", userId);
     const gmail = await configureOAuth(userId, supabase);
-    console.log("Gmail configured", gmail?.users ? "ok" : "failed");
 
     // 2️⃣ Fetch Snippet
     console.log("Fetching snippet", snippetId);

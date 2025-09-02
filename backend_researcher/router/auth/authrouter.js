@@ -20,6 +20,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
+
 //Defined Scopes
 const scopes = [
   "email",
@@ -64,7 +65,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:3000/account/login", 
+          redirectTo: "http://localhost:3000/account/login",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -392,5 +393,37 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+/*
+router.post("/test-refresh-gmail", verifyToken, async (req, res) => {
+  const { accessToken, refreshToken } = req.body;
+  const userId = req.user.sub;
+
+  try {
+    const oauth2Client = await getGoogleClient({
+      accessToken,
+      refreshToken,
+      userId,
+      supabase: req.supabaseClient,
+    });
+
+    // Check if token is near expiry or was refreshed
+    const now = Date.now();
+    const expiry = oauth2Client.credentials.expiry_date || 0;
+    const refreshed = expiry < now + 5 * 60 * 1000; // refreshed if expires in less than 5 min
+
+    return res.status(200).json({
+      message: "Google client ready",
+      refreshed,
+      accessToken: oauth2Client.credentials.access_token,
+      refreshToken: oauth2Client.credentials.refresh_token,
+      expiry_date: oauth2Client.credentials.expiry_date,
+    });
+  } catch (err) {
+    console.error("Failed to get Google client:", err);
+    return res.status(500).json({ message: "Failed to refresh Google token", error: err.message });
+  }
+});
+*/
 
 export default router;
