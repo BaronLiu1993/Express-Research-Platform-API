@@ -27,7 +27,7 @@ export async function extractHtmlOrPlainText(payload) {
   return null;
 }
 
-export function makeReplyBody({
+export async function makeReplyBody({
   to,
   from,
   name,
@@ -69,7 +69,7 @@ export function makeReplyBody({
   });
 }
 
-export function makeBody({
+export async function makeBody({
   to,
   from,
   name,

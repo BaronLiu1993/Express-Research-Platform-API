@@ -2,11 +2,11 @@ import { google } from "googleapis";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import Mustache from "mustache";
-import { decryptToken } from "../services/authServices.js";
 import { makeReplyBody } from "../services/googleServices.js";
 import { makeBody } from "../services/googleServices.js";
 import { extractHtmlOrPlainText } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
+import { decryptToken } from "../services/authServices.js";
 import { encryptToken } from "../services/authServices.js";
 
 dotenv.config();
@@ -21,66 +21,57 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-export async function getGoogleClient({ refreshToken, accessToken, userId, supabase }) {
-  const decryptedAccessToken = decryptToken(accessToken);
-  const decryptedRefreshToken = decryptToken(refreshToken);
-
-  oauth2Client.setCredentials({
-    access_token: decryptedAccessToken,
-    refresh_token: decryptedRefreshToken,
-  });
-
+async function configureOAuth(userId, supabase, fetchDrive = false) {
   try {
-    const { credentials } = await oauth2Client.refreshAccessToken(); 
-    const newAccessToken = credentials.access_token;
-    const newRefreshToken = credentials.refresh_token || decryptedRefreshToken;
-    // Update Supabase
-    const { error } = await supabase
+    const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
-      .update({
-        gmail_auth_token: encryptToken(newAccessToken),
-        gmail_refresh_token: encryptToken(newRefreshToken),
-      })
+      .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
 
+    const decryptedAccessTokens = decryptToken(tokenData.gmail_auth_token);
+    const decryptedRefreshTokens = decryptToken(tokenData.gmail_refresh_token);
+    console.log(decryptedAccessTokens);
+    console.log(decryptedRefreshTokens);
+
+    //Check if it needs to be refreshed
+    oauth2Client.setCredentials({
+      access_token: decryptedAccessTokens,
+      refresh_token: decryptedRefreshTokens,
+    });
+
+    const { token } = await oauth2Client.getAccessToken();
+    console.log("Access token:", token);
+
+    /*if (token) {
+      const { error: tokenInsertionError } = await supabase
+      .from("User_Profiles")
+      .insert({
+        gmail_auth_token: 
+        gmail_refresh_token:
+      })
+    } */
+
+    if (fetchDrive) {
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const drive = google.drive({ version: "v3", auth: oauth2Client });
+      return { gmail, drive };
+    }
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    return gmail;
   } catch (err) {
-    throw err; // propagate so retry logic can handle
+    console.log(err);
+    throw new Error("Internal Server Error");
   }
-
-  return oauth2Client;
-}
-
-export async function configureGoogleClients(userId, supabase, fetchDrive = false) {
-  // Get tokens from Supabase
-  const { data: tokenData, error: tokenDataError } = await supabase
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
-
-  const client = await getGoogleClient({
-    accessToken: tokenData.gmail_auth_token,
-    refreshToken: tokenData.gmail_refresh_token,
-    userId,
-    supabase,
-  });
-
-  const gmail = google.gmail({ version: "v1", auth: client });
-  if (fetchDrive) {
-    const drive = google.drive({ version: "v3", auth: client });
-    return { gmail, drive };
-  }
-  return gmail;
 }
 
 export async function generateDraftFromSnippetEmail({
   userId,
   professorId,
   body,
-  accessToken, // From Verify Token
+  accessToken,
 }) {
-
   const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
   const trackingId = uuidv4();
 
@@ -95,8 +86,6 @@ export async function generateDraftFromSnippetEmail({
   try {
     const gmail = await configureOAuth(userId, supabase);
 
-    // 2️⃣ Fetch Snippet
-    console.log("Fetching snippet", snippetId);
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
       .select("*")
@@ -105,10 +94,8 @@ export async function generateDraftFromSnippetEmail({
       .single();
 
     if (snippetError) {
-      console.error("Error fetching snippet:", snippetError);
       return { message: "Failed fetching snippet" };
     }
-    console.log("Snippet fetched:", snippetData);
 
     const snippetHTML = snippetData.snippet_html;
     const snippetSubject = snippetData.snippet_subject;
@@ -116,38 +103,32 @@ export async function generateDraftFromSnippetEmail({
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const html = Mustache.render(snippetHTML, dynamicFields);
 
-    console.log("Rendering email body", { subject, html });
+    const raw = await makeBody({
+      to,
+      from: fromName,
+      name: fromEmail,
+      subject: subject,
+      html,
+    });
 
-    const raw = makeBody(to, fromName, fromEmail, subject, html);
-
-    // 3️⃣ Create Gmail Draft
-    console.log("Creating Gmail draft for", to);
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw } },
     });
-    console.log("Draft created:", draft.data?.id);
 
-    // 4️⃣ Insert into Emails table
-    console.log("Inserting draft record into Emails table");
-    const { data: emailData, error: insertionError } = await supabase.from("Emails").insert([
-      {
-        user_id: userId,
-        professor_id: parseInt(professorId),
-        draft_id: draft.data.id,
-        sent: false,
-        type: "draft",
-        tracking_id: trackingId,
-      },
-    ]);
-    if (insertionError) {
-      console.error("Error inserting email:", insertionError);
-      return { message: "Failed inserting email" };
-    }
-    console.log("Email record inserted:", emailData);
+    const { data: emailData, error: insertionError } = await supabase
+      .from("Emails")
+      .insert([
+        {
+          user_id: userId,
+          professor_id: parseInt(professorId),
+          draft_id: draft.data.id,
+          sent: false,
+          type: "draft",
+          tracking_id: trackingId,
+        },
+      ]);
 
-    // 5️⃣ Move from Saved → InProgress
-    console.log("Checking saved data for user/professor", userId, professorId);
     const { data: savedData, error: savedError } = await supabase
       .from("Saved")
       .select("*")
@@ -156,25 +137,21 @@ export async function generateDraftFromSnippetEmail({
       .single();
 
     if (savedError) {
-      console.log("No saved data found, skipping move to InProgress");
+      throw new Error("Failed to Saved");
     } else {
-      console.log("Moving savedData to InProgress", savedData);
       await supabase.from("InProgress").insert(savedData);
       await supabase
         .from("Saved")
         .delete()
         .eq("user_id", userId)
         .eq("professor_id", professorId);
-      console.log("Move complete");
     }
 
     return { message: "Draft successfully created" };
-  } catch (err) {
-    console.error("Error in generateDraftFromSnippetEmail:", err);
-    return { message: "Failed to create draft", error: err.message || err };
+  } catch {
+    return { message: "Failed to create draft" };
   }
 }
-
 
 //Sending Function For First Initial Email
 export async function sendSnippetEmail({
@@ -182,8 +159,16 @@ export async function sendSnippetEmail({
   userEmail,
   userName,
   body,
-  supabase,
+  accessToken,
 }) {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+
   try {
     const gmail = await configureOAuth(userId, supabase);
 
