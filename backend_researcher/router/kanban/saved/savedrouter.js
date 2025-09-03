@@ -3,30 +3,26 @@ import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
-router.get(
-  "/repository/get-all-savedId",
-  verifyToken,
-  async (req, res) => {
+router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
+  try {
+    const { data: professorIdData, error: professorIdFetchError } =
+      await req.supabaseClient
+        .from("Saved")
+        .select("professor_id")
+        .eq("user_id", userId);
 
-    const userId = req.user.sub;
-    try {
-      const { data: professorIdData, error: professorIdFetchError } =
-        await req.supabaseClient
-          .from("Saved")
-          .select("professor_id")
-          .eq("user_id", userId);
 
-      if (professorIdFetchError) {
-        return res.status(400).json({ message: "Failed to Fetch" });
-      }
-      console.log(professorIdData)
-      const professorIds = professorIdData.map((item) => item.professor_id);
-      return res.status(200).json({ data: professorIds });
-    } catch (err) {
-      return res.status(500).json({ message: "Internal Server Error" });
+    if (professorIdFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
     }
+
+    const professorIds = professorIdData.map((item) => item.professor_id);
+    return res.status(200).json({ data: professorIds });
+  } catch (err) {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-);
+});
 
 router.get("/kanban/get-saved/:userId", verifyToken, async (req, res) => {
   const userId = req.user.sub;

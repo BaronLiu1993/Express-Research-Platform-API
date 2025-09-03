@@ -12,7 +12,7 @@ const router = express.Router();
 router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
-  const supabaseClient = req.supabaseClient
+  const supabaseClient = req.supabaseClient;
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -25,48 +25,54 @@ router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
           dynamicFields: professor.dynamicFields,
           to: professor.email,
         },
-        supabase: supabaseClient
+        supabase: supabaseClient,
       },
     }));
     await followUpDraftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
-    console.log(err)
+    console.log(err);
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
 
-router.post("/mass-send-followup-with-attachments", verifyToken, async (req, res) => {
-  const { userEmail, userName, professorData } = req.body;
-  const userId = req.user.sub;
-  const supabaseClient = req.supabaseClient
+router.post(
+  "/mass-send-followup-with-attachments",
+  verifyToken,
+  async (req, res) => {
+    const { userEmail, userName, professorData } = req.body;
+    const userId = req.user.sub;
+    const supabaseClient = req.supabaseClient;
 
-  try {
-    const jobs = professorData.map((professor) => ({
-      name: "follow-up-email-with-attachments",
-      data: {
-        userId,
-        userEmail,
-        userName,
-        supabase: supabaseClient,
-        body: {
-          professorId: professor.professor_id,
-          professorEmail: professor.email,
-          professorName: professor.name,
+    try {
+      const jobs = professorData.map((professor) => ({
+        name: "follow-up-email-with-attachments",
+        data: {
+          userId,
+          userEmail,
+          userName,
+          supabase: supabaseClient,
+          body: {
+            professorId: professor.professor_id,
+            professorEmail: professor.email,
+            professorName: professor.name,
+          },
         },
-      },
-    }));
-    await followUpWithAttachmentsQueue.addBulk(jobs);
-    res.status(202).json({ message: "Bulk emails queued", count: jobs.length });
-  } catch {
-    res.status(500).json({ message: "Failed to queue bulk emails" });
+      }));
+      await followUpWithAttachmentsQueue.addBulk(jobs);
+      res
+        .status(202)
+        .json({ message: "Bulk emails queued", count: jobs.length });
+    } catch {
+      res.status(500).json({ message: "Failed to queue bulk emails" });
+    }
   }
-});
+);
 
 router.post("/mass-send-followup", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-  const supabaseClient = req.supabaseClient
+  const supabaseClient = req.supabaseClient;
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -95,7 +101,7 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
 router.post("/snippet-create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
-  console.log(professorData)
+  console.log(professorData);
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
@@ -107,7 +113,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
           ...baseBody,
           dynamicFields: professor.dynamicFields,
           to: professor.email,
-          name: professor.name
+          toName: professor.name
         },
       },
     }));
@@ -119,10 +125,10 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
+  console.log("hit")
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-  const supabaseClient = req.supabaseClient;
-
+  
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email-with-attachments",
@@ -130,7 +136,7 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
         userId,
         userEmail,
         userName,
-        supabase: supabaseClient,
+        accessToken: req.token,
         body: {
           professorId: professor.id,
           professorEmail: professor.email,
@@ -148,7 +154,7 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
 router.post("/mass-send", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-  const supabaseClient = req.supabaseClient
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
@@ -156,7 +162,7 @@ router.post("/mass-send", verifyToken, async (req, res) => {
         userId,
         userEmail,
         userName,
-        supabase: supabaseClient,
+        accessToken: req.token,
         body: {
           professorId: professor.id,
           professorEmail: professor.email,

@@ -5,10 +5,9 @@ import { Connection } from "../redis/redis.js";
 export const sendWorker = new Worker(
     'send-email',
     async (job) => {
-      const { userId, userEmail, userName, body } = job.data;
-      console.log(userName)
+      const { userId, userEmail, userName, body, accessToken } = job.data;
       try {
-        const result = await sendSnippetEmail({ userId, userEmail, userName, body });
+        const result = await sendSnippetEmail({ userId, userEmail, userName, body, accessToken });
         return result;
       } catch (error) {
         throw error; 

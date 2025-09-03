@@ -66,7 +66,7 @@ router.post(
         const { data: constantData, error: constantError } =
           await req.supabaseClient
             .from("Taishan")
-            .select("email")
+            .select("email, name")
             .eq("id", professorId)
             .single();
 
@@ -105,6 +105,7 @@ router.post(
         const resultEntry = {
           id: professorId,
           email: constantData.email,
+          name: constantData.name
         };
 
         if (Object.keys(dynamicFields).length > 0) {

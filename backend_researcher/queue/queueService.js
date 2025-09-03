@@ -18,7 +18,7 @@ export async function generateDraftFromSnippetEmail({
   body,
   accessToken,
 }) {
-  const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
+  const { snippetId, dynamicFields, to, fromName, fromEmail, toName } = body;
   const trackingId = uuidv4();
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -30,7 +30,7 @@ export async function generateDraftFromSnippetEmail({
   });
 
   try {
-    const gmail = await configureOAuth({userId, supabase});
+    const gmail = await configureOAuth({ userId, supabase });
 
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
@@ -70,8 +70,14 @@ export async function generateDraftFromSnippetEmail({
         sent: false,
         type: "draft",
         tracking_id: trackingId,
+        professor_email: to,
+        professor_name: toName,
       },
     ]);
+
+    if (insertionError) {
+      throw new Error("Failed to Insert");
+    }
 
     const { data: savedData, error: savedError } = await supabase
       .from("Saved")
@@ -123,22 +129,22 @@ export async function sendSnippetEmail({
       .eq("professor_id", body.professorId)
       .eq("type", "draft")
       .single();
-    
+
     if (draftFetchError) {
-      throw new Error("Failed to Fetch Drafts")
+      throw new Error("Failed to Fetch Drafts");
     }
 
     //build tracking pixel
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
-    
+
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
 
     const payload = draft.data.message.payload;
-    const headers = payload.headers || [];
-    const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    const headers = payload.headers;
+    const subject = headers.find((h) => h.name === "Subject")?.value;
     const htmlBody = extractHtmlOrPlainText(payload);
     const finalHtmlBody = htmlBody + trackingPixel;
 
@@ -171,6 +177,10 @@ export async function sendSnippetEmail({
         thread_id: sendResponse.data.threadId,
       })
       .eq("draft_id", draftData.draft_id);
+
+    if (insertionError) {
+      throw new Error("Insertion Draft Error");
+    }
 
     const { data: inProgressData } = await supabase
       .from("InProgress")
@@ -207,12 +217,24 @@ export async function sendSnippetEmailWithAttachments({
   userEmail,
   userName,
   body,
-  supabase,
+  accessToken,
 }) {
   try {
-    const oAuthObject = await configureOAuth(userId, supabase);
-    const gmail = oAuthObject.gmail;
-    const drive = oAuthObject.drive;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    });
+
+    const googleClients = await configureOAuth({
+      userId,
+      supabase,
+      fetchDrive: true,
+    });
+    const gmail = googleClients.gmail;
+    const drive = googleClients.gmail;
 
     const { data: draftData, error: draftFetchError } = await supabase
       .from("Emails")
@@ -221,6 +243,10 @@ export async function sendSnippetEmailWithAttachments({
       .eq("professor_id", body.professorId)
       .eq("type", "draft")
       .single();
+
+    if (draftFetchError) {
+      throw new Error("Draft Fetch Error");
+    }
 
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
 
@@ -234,6 +260,10 @@ export async function sendSnippetEmailWithAttachments({
       .select("resume, transcript")
       .eq("user_id", userId)
       .single();
+
+    if (fileDataError || !fileData) {
+      throw new Error("No Files Found");
+    }
 
     let emailAttachments = [];
 
@@ -336,12 +366,18 @@ export async function generateFollowUpDraftSnippetEmail({
   userId,
   professorId,
   body,
-  supabase,
+  accessToken,
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
   try {
-    const gmail = await configureOAuth(userId, supabase);
-
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    });
+    const gmail = await configureOAuth({ userId, supabase });
     // Fetch Snippet
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
@@ -350,12 +386,23 @@ export async function generateFollowUpDraftSnippetEmail({
       .eq("id", snippetId)
       .single();
 
+    if (snippetError) {
+      throw new Error("Snippet Fetching Error");
+    }
+
     const snippetHTML = snippetData.snippet_html;
     const snippetSubject = snippetData.snippet_subject;
 
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const html = Mustache.render(snippetHTML, dynamicFields);
-    const raw = makeReplyBody(to, fromName, fromEmail, subject, html);
+    const raw = makeReplyBody({
+      to,
+      from: fromEmail,
+      name: fromName,
+      subject,
+      html,
+      inReplyToMessageId,
+    });
 
     // Create Gmail Draft
     const draft = await gmail.users.drafts.create({
@@ -374,6 +421,10 @@ export async function generateFollowUpDraftSnippetEmail({
       },
     ]);
 
+    if (insertionError) {
+      throw new Error("Insertion Error");
+    }
+
     return { message: "Draft successfully created" };
   } catch (err) {
     return { message: "Failed to create draft" };
@@ -391,7 +442,7 @@ export async function sendFollowUpEmail({
   supabase,
 }) {
   try {
-    const gmail = await configureOAuth(userId, supabase);
+    const gmail = await configureOAuth({ userId, supabase });
     //body should have draftId
 
     // Build tracking pixel

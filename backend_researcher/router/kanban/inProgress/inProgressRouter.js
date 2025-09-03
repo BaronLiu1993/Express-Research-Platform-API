@@ -4,7 +4,7 @@ import { verifyToken } from "../../../services/authServices.js";
 const router = express.Router();
 
 router.get(
-  "/repository/get-all-appliedId/:userId",
+  "/repository/get-all-appliedId",
   verifyToken,
   async (req, res) => {
     console.log("fired")
@@ -12,13 +12,14 @@ router.get(
     try {
       const { data: professorIdData, error: professorIdFetchError } =
         await req.supabaseClient
-          .from("Completed")
+          .from("InProgress")
           .select("professor_id")
           .eq("user_id", userId);
 
       if (professorIdFetchError) {
         return res.status(400).json({ message: "Failed to Fetch" });
       }
+      console.log(professorIdData)
       const professorIds = professorIdData.map((item) => item.professor_id);
       return res.status(200).json({ data: professorIds });
     } catch {
@@ -28,7 +29,7 @@ router.get(
 );
 
 //Get Kanban
-router.get("/kanban/get-in-progress/:userId", verifyToken, async (req, res) => {
+router.get("/kanban/get-in-progress", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   try {
     const { data: savedData, error: savedFetchError } = await req.supabaseClient
@@ -47,7 +48,7 @@ router.get("/kanban/get-in-progress/:userId", verifyToken, async (req, res) => {
   }
 });
 
-router.get("/fetch/draft/:userId", verifyToken, async (req, res) => {
+router.get("/fetch/draft", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   console.log(userId)
   try {

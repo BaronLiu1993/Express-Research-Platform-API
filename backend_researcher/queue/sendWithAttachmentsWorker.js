@@ -5,7 +5,7 @@ import { Connection } from "../redis/redis.js";
 export const sendWithAttachmentsWorker = new Worker(
   "send-email-with-attachments",
   async (job) => {
-    const { userId, userEmail, userName, body } = job.data;
+    const { userId, userEmail, userName, body, accessToken } = job.data;
     console.log(job.data)
     try {
       const result = await sendSnippetEmailWithAttachments({
@@ -13,6 +13,7 @@ export const sendWithAttachmentsWorker = new Worker(
         userEmail,
         userName,
         body,
+        accessToken
       });
       return result;
     } catch (error) {

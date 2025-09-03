@@ -66,6 +66,7 @@ router.get("/taishan/filter", verifyToken, async (req, res) => {
 
 
 router.get("/taishan", verifyToken, async (req, res) => {
+  console.log("fired")
   const { page, search } = req.query;
   const pageNumber = parseInt(page) || 1;
   const limit = 20;
