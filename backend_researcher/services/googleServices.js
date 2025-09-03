@@ -9,9 +9,9 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-export async function configureOAuth(userId, supabase, fetchDrive = false) {
+export async function configureOAuth({userId, supabase, fetchDrive = false}) {
+
   try {
-    // Fetch stored tokens
     const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
@@ -22,17 +22,22 @@ export async function configureOAuth(userId, supabase, fetchDrive = false) {
       throw new Error("No tokens found for user");
     }
 
+    // 2️⃣ Decrypt tokens
     const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
     const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
 
-    // Set OAuth2 credentials
+    if (!decryptedRefreshToken) {
+      throw new Error("No valid refresh token");
+    }
+
+    // 3️⃣ Set OAuth2 credentials
     oauth2Client.setCredentials({
       access_token: decryptedAccessToken,
       refresh_token: decryptedRefreshToken,
     });
 
-    // Get a fresh access token
     const accessTokenResponse = await oauth2Client.getAccessToken();
+
     const newAccessToken = accessTokenResponse.token;
 
     if (!newAccessToken) {
@@ -40,10 +45,12 @@ export async function configureOAuth(userId, supabase, fetchDrive = false) {
     }
 
     const encryptedAccessToken = encryptToken(newAccessToken);
+
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
       .update({ gmail_auth_token: encryptedAccessToken })
       .eq("user_id", userId);
+
 
     if (fetchDrive) {
       const gmail = google.gmail({ version: "v1", auth: oauth2Client });
@@ -53,11 +60,12 @@ export async function configureOAuth(userId, supabase, fetchDrive = false) {
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     return gmail;
-
   } catch (err) {
+    console.log(err)
     throw new Error("Internal Server Error");
   }
 }
+
 
 export async function getDriveFileBuffer(fileId, drive) {
   const res = await drive.files.get(
@@ -67,23 +75,25 @@ export async function getDriveFileBuffer(fileId, drive) {
   return Buffer.from(res.data);
 }
 
-export async function extractHtmlOrPlainText(payload) {
-
-  if (
-    (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
-    payload.body?.data
-  ) {
-    return Buffer.from(payload.body.data, "base64").toString("utf-8");
-  }
-
-  if (payload.parts && Array.isArray(payload.parts)) {
-    for (const part of payload.parts) {
-      const result = getLatestReply(part);
-      if (result) return result;
+export function extractHtmlOrPlainText(payload) {
+  try {
+    if (!payload) {
+      throw new Error("No Payload");
     }
-  }
 
-  return null;
+    if (
+      (payload.mimeType === "text/html" || payload.mimeType === "text/plain") &&
+      payload.body?.data
+    ) {
+      const base64 = payload.body.data.replace(/-/g, "+").replace(/_/g, "/");
+      return Buffer.from(base64, "base64").toString("utf-8");
+    }
+    if (payload.parts && Array.isArray(payload.parts) && payload.parts.length) {
+      return extractHtmlOrPlainText(payload.parts[0]);
+    }
+  } catch {
+    throw new Error("Internal Server Error");
+  }
 }
 
 export async function makeReplyBody({
@@ -171,4 +181,3 @@ export function decodeBody(encoded) {
   const buffer = Buffer.from(padded, "base64");
   return buffer.toString("utf-8");
 }
-

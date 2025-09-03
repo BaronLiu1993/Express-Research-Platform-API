@@ -5,12 +5,12 @@ import { makeReplyBody } from "../services/googleServices.js";
 import { makeBody } from "../services/googleServices.js";
 import { extractHtmlOrPlainText } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
+import { configureOAuth } from "../services/googleServices.js";
 
 dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-
 
 export async function generateDraftFromSnippetEmail({
   userId,
@@ -62,7 +62,7 @@ export async function generateDraftFromSnippetEmail({
       requestBody: { message: { raw } },
     });
 
-    const { data: emailData, error: insertionError } = await supabase
+    const { error: insertionError } = await supabase
       .from("Emails")
       .insert([
         {

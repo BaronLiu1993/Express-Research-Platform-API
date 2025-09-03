@@ -1,6 +1,9 @@
 import express from "express";
 import { google } from "googleapis";
-import { extractHtmlOrPlainText } from "../../services/googleServices.js";
+import {
+  configureOAuth,
+  extractHtmlOrPlainText,
+} from "../../services/googleServices.js";
 import { makeReplyBody } from "../../services/googleServices.js";
 import { makeBody } from "../../services/googleServices.js";
 
@@ -335,7 +338,7 @@ router.put(
       );
       const inReplyTo = messageIdHeader?.value;
 
-      const raw = makeReplyBody(
+      const raw = await makeReplyBody(
         to,
         fromName,
         fromEmail,
@@ -363,8 +366,9 @@ router.post(
     const { professorId } = req.params;
     const { to, fromName, fromEmail, subject, message } = req.body;
     const userId = req.user.sub;
-    if (!to || !fromName || !fromEmail || !subject || !message) {
-      return res.status(400).json({});
+
+    if (!to || !fromName || !fromEmail || !message) {
+      return res.status(400).json({message: "Missing Data"});
     }
 
     const { data: tokenData, error: fetchError } = await req.supabaseClient
@@ -374,7 +378,7 @@ router.post(
       .single();
 
     if (fetchError || !tokenData) {
-      return res.status(401).json({});
+      return res.status(401).json({message: ""});
     }
 
     oauth2Client.setCredentials({
@@ -418,7 +422,6 @@ router.post(
 //Require someone to delete the workflow first and then restart again
 
 router.get("/resume-draft/:draftId", verifyToken, async (req, res) => {
-  console.log("fired")
   const { draftId } = req.params;
   const userId = req.user.sub;
 
@@ -428,30 +431,11 @@ router.get("/resume-draft/:draftId", verifyToken, async (req, res) => {
     });
   }
 
-  const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
-
-  if (
-    tokenFetchError ||
-    !tokenData ||
-    !tokenData.gmail_auth_token ||
-    !tokenData.gmail_refresh_token
-  ) {
-    return res.status(404).json({});
-  }
-
-  oauth2Client.setCredentials({
-    access_token: decryptToken(tokenData.gmail_auth_token),
-    refresh_token: decryptToken(tokenData.gmail_refresh_token),
-  });
-
   try {
-    await oauth2Client.getAccessToken();
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
@@ -473,12 +457,12 @@ router.get("/resume-draft/:draftId", verifyToken, async (req, res) => {
     if (error.response?.data?.error?.code === 401) {
       return res.status(200).json({ draftExists: false });
     }
-    console.log(error)
+    console.log(error);
     return res.status(500).json({ draftExists: false });
   }
 });
 
-router.put("/update-draft/:draftId/:userId", verifyToken, async (req, res) => {
+router.put("/update-draft/:draftId", verifyToken, async (req, res) => {
   const { draftId } = req.params;
   const { to, fromName, fromEmail, subject, body } = req.body;
   const userId = req.user.sub;
@@ -487,28 +471,17 @@ router.put("/update-draft/:draftId/:userId", verifyToken, async (req, res) => {
     return res.status(401).json({ updated: false });
   }
 
-  const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
+  const gmail = await configureOAuth({ userId, supabase: req.supabaseClient });
 
-  if (!tokenData || tokenFetchError) {
-    return res.status(401).json({ updated: false });
-  }
-
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
+  const raw = await makeBody({
+    to,
+    from: fromEmail,
+    name: fromName,
+    subject,
+    html: body,
   });
 
-  const raw = makeBody(to, fromName, fromEmail, subject, body);
-
   try {
-    await oauth2Client.getAccessToken();
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
     await gmail.users.drafts.update({
       userId: "me",
       id: draftId,
@@ -517,14 +490,25 @@ router.put("/update-draft/:draftId/:userId", verifyToken, async (req, res) => {
 
     return res.status(200).json({ updated: true, subject, body });
   } catch (err) {
+    console.log(err);
     return res.status(500).json({ updated: false });
   }
 });
 
 router.delete("/delete-draft/:draftId", verifyToken, async (req, res) => {
   const { draftId } = req.params;
-
+  const userId = req.user.sub;
   try {
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
+
+    await gmail.users.drafts.delete({
+      userId: "me",
+      id: draftId,
+    });
+
     const { error: draftDeleteError } = await req.supabaseClient
       .from("Emails")
       .delete()
@@ -534,8 +518,9 @@ router.delete("/delete-draft/:draftId", verifyToken, async (req, res) => {
     if (draftDeleteError) {
       return res.status(400).json({ message: "Failed To Delete" });
     }
+
     return res.status(200).json({ message: "Deleted Successfully" });
-  } catch {
+  } catch (err) {
     return res.status(500).json({ message: "Internal Server Errors" });
   }
 });
