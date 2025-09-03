@@ -1,4 +1,63 @@
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
+import { decryptToken } from "../services/authServices.js";
+import { encryptToken } from "../services/authServices.js";
+import { google } from "googleapis";
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.CLIENT_ID,
+  process.env.CLIENT_SECRET,
+  process.env.REDIRECT_URI
+);
+
+export async function configureOAuth(userId, supabase, fetchDrive = false) {
+  try {
+    // Fetch stored tokens
+    const { data: tokenData, error: tokenError } = await supabase
+      .from("User_Profiles")
+      .select("gmail_auth_token, gmail_refresh_token")
+      .eq("user_id", userId)
+      .single();
+
+    if (tokenError || !tokenData) {
+      throw new Error("No tokens found for user");
+    }
+
+    const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
+    const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
+
+    // Set OAuth2 credentials
+    oauth2Client.setCredentials({
+      access_token: decryptedAccessToken,
+      refresh_token: decryptedRefreshToken,
+    });
+
+    // Get a fresh access token
+    const accessTokenResponse = await oauth2Client.getAccessToken();
+    const newAccessToken = accessTokenResponse.token;
+
+    if (!newAccessToken) {
+      throw new Error("Failed to refresh access token");
+    }
+
+    const encryptedAccessToken = encryptToken(newAccessToken);
+    const { error: tokenInsertionError } = await supabase
+      .from("User_Profiles")
+      .update({ gmail_auth_token: encryptedAccessToken })
+      .eq("user_id", userId);
+
+    if (fetchDrive) {
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const drive = google.drive({ version: "v3", auth: oauth2Client });
+      return { gmail, drive };
+    }
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    return gmail;
+
+  } catch (err) {
+    throw new Error("Internal Server Error");
+  }
+}
 
 export async function getDriveFileBuffer(fileId, drive) {
   const res = await drive.files.get(

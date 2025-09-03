@@ -1,4 +1,3 @@
-import { google } from "googleapis";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import Mustache from "mustache";
@@ -6,94 +5,11 @@ import { makeReplyBody } from "../services/googleServices.js";
 import { makeBody } from "../services/googleServices.js";
 import { extractHtmlOrPlainText } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
-import { decryptToken } from "../services/authServices.js";
-import { encryptToken } from "../services/authServices.js";
 
 dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-
-//Gmail OAuth, Getting User Data
-const oauth2Client = new google.auth.OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI
-);
-
-async function configureOAuth(userId, supabase, fetchDrive = false) {
-  console.log("🚀 Starting configureOAuth for user:", userId);
-
-  try {
-    // Fetch stored tokens
-    const { data: tokenData, error: tokenError } = await supabase
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    console.log("📦 Supabase token fetch result:", { tokenData, tokenError });
-
-    if (tokenError || !tokenData) {
-      console.error("❌ No token data or error fetching tokens");
-      throw new Error("No tokens found for user");
-    }
-
-    const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
-    const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
-
-    console.log("🔑 Decrypted tokens:", { decryptedAccessToken, decryptedRefreshToken });
-
-    // Set OAuth2 credentials
-    oauth2Client.setCredentials({
-      access_token: decryptedAccessToken,
-      refresh_token: decryptedRefreshToken,
-    });
-    console.log("🔧 OAuth2 client credentials set");
-
-    // Get a fresh access token
-    const accessTokenResponse = await oauth2Client.getAccessToken();
-    const newAccessToken = accessTokenResponse.token;
-
-    console.log("🆕 Access token fetched:", newAccessToken);
-
-    if (!newAccessToken) {
-      console.error("❌ Failed to refresh access token");
-      throw new Error("Failed to refresh access token");
-    }
-
-    // Update Supabase with the new encrypted token
-    const encryptedAccessToken = encryptToken(newAccessToken);
-    console.log("🔒 Encrypted new access token:", encryptedAccessToken);
-
-    const { error: tokenInsertionError } = await supabase
-      .from("User_Profiles")
-      .update({ gmail_auth_token: encryptedAccessToken })
-      .eq("user_id", userId);
-
-    if (tokenInsertionError) {
-      console.warn("⚠️ Failed to update token in Supabase:", tokenInsertionError);
-    } else {
-      console.log("✅ Supabase updated with new access token");
-    }
-
-    // Return Gmail and/or Drive clients
-    if (fetchDrive) {
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const drive = google.drive({ version: "v3", auth: oauth2Client });
-      console.log("📁 Returning Gmail & Drive clients");
-      return { gmail, drive };
-    }
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    console.log("📧 Returning Gmail client only");
-    return gmail;
-
-  } catch (err) {
-    console.error("❌ Error in configureOAuth:", err);
-    throw new Error("Internal Server Error");
-  }
-}
 
 
 export async function generateDraftFromSnippetEmail({
