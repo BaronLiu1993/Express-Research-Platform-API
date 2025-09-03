@@ -30,7 +30,7 @@ export async function generateDraftFromSnippetEmail({
   });
 
   try {
-    const gmail = await configureOAuth(userId, supabase);
+    const gmail = await configureOAuth({userId, supabase});
 
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
@@ -62,18 +62,16 @@ export async function generateDraftFromSnippetEmail({
       requestBody: { message: { raw } },
     });
 
-    const { error: insertionError } = await supabase
-      .from("Emails")
-      .insert([
-        {
-          user_id: userId,
-          professor_id: parseInt(professorId),
-          draft_id: draft.data.id,
-          sent: false,
-          type: "draft",
-          tracking_id: trackingId,
-        },
-      ]);
+    const { error: insertionError } = await supabase.from("Emails").insert([
+      {
+        user_id: userId,
+        professor_id: parseInt(professorId),
+        draft_id: draft.data.id,
+        sent: false,
+        type: "draft",
+        tracking_id: trackingId,
+      },
+    ]);
 
     const { data: savedData, error: savedError } = await supabase
       .from("Saved")
@@ -116,7 +114,7 @@ export async function sendSnippetEmail({
   });
 
   try {
-    const gmail = await configureOAuth(userId, supabase);
+    const gmail = await configureOAuth({ userId, supabase });
 
     const { data: draftData, error: draftFetchError } = await supabase
       .from("Emails")
@@ -125,15 +123,19 @@ export async function sendSnippetEmail({
       .eq("professor_id", body.professorId)
       .eq("type", "draft")
       .single();
+    
+    if (draftFetchError) {
+      throw new Error("Failed to Fetch Drafts")
+    }
 
     //build tracking pixel
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
 
-    //Parsing the payload and breaking it down
     const payload = draft.data.message.payload;
     const headers = payload.headers || [];
     const subject = headers.find((h) => h.name === "Subject")?.value || "";

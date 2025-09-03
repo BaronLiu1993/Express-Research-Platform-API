@@ -91,11 +91,11 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
 });
 
 //Normal First Email
-
+//Add Professor Email Somehow tomorrow
 router.post("/snippet-create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
-  console.log(req.token)
+  console.log(professorData)
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
@@ -107,6 +107,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
           ...baseBody,
           dynamicFields: professor.dynamicFields,
           to: professor.email,
+          name: professor.name
         },
       },
     }));

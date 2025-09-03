@@ -8,7 +8,7 @@ import { makeReplyBody } from "../../services/googleServices.js";
 import { makeBody } from "../../services/googleServices.js";
 
 import { v4 as uuidv4 } from "uuid";
-import { decryptToken, verifyToken } from "../../services/authServices.js";
+import { verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 
@@ -359,66 +359,6 @@ router.put(
   }
 );
 
-router.post(
-  "/create-draft/:userId/:professorId",
-  verifyToken,
-  async (req, res) => {
-    const { professorId } = req.params;
-    const { to, fromName, fromEmail, subject, message } = req.body;
-    const userId = req.user.sub;
-
-    if (!to || !fromName || !fromEmail || !message) {
-      return res.status(400).json({message: "Missing Data"});
-    }
-
-    const { data: tokenData, error: fetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError || !tokenData) {
-      return res.status(401).json({message: ""});
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
-
-    try {
-      await oauth2Client.getAccessToken();
-      //Create the body
-      const trackingId = uuidv4();
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const raw = makeBody(to, fromName, fromEmail, subject, message);
-      const draft = await gmail.users.drafts.create({
-        userId: "me",
-        requestBody: { message: { raw } },
-      });
-      const { error: insertionError } = await req.supabaseClient
-        .from("Emails")
-        .insert([
-          {
-            user_id: userId,
-            professor_id: parseInt(professorId),
-            draft_id: draft.data.id,
-            type: "First",
-            tracking_id: trackingId,
-          },
-        ]);
-
-      if (insertionError) {
-        return res.status(400).json({ message: "Insertion Error" });
-      }
-
-      return res.status(200).json({ draftId: draft.data.id });
-    } catch {
-      return res.status(500).json({ message: "Internal Server Error" });
-    }
-  }
-);
-
 //Require someone to delete the workflow first and then restart again
 
 router.get("/resume-draft/:draftId", verifyToken, async (req, res) => {
@@ -526,3 +466,68 @@ router.delete("/delete-draft/:draftId", verifyToken, async (req, res) => {
 });
 
 export default router;
+
+
+
+/**
+ * 
+router.post(
+  "/create-draft/:userId/:professorId",
+  verifyToken,
+  async (req, res) => {
+    const { professorId } = req.params;
+    const { to, fromName, fromEmail, subject, message } = req.body;
+    const userId = req.user.sub;
+
+    if (!to || !fromName || !fromEmail || !message) {
+      return res.status(400).json({message: "Missing Data"});
+    }
+
+    const { data: tokenData, error: fetchError } = await req.supabaseClient
+      .from("User_Profiles")
+      .select("gmail_auth_token, gmail_refresh_token")
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError || !tokenData) {
+      return res.status(401).json({message: ""});
+    }
+
+    oauth2Client.setCredentials({
+      access_token: tokenData.gmail_auth_token,
+      refresh_token: tokenData.gmail_refresh_token,
+    });
+
+    try {
+      await oauth2Client.getAccessToken();
+      //Create the body
+      const trackingId = uuidv4();
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const raw = makeBody(to, fromName, fromEmail, subject, message);
+      const draft = await gmail.users.drafts.create({
+        userId: "me",
+        requestBody: { message: { raw } },
+      });
+      const { error: insertionError } = await req.supabaseClient
+        .from("Emails")
+        .insert([
+          {
+            user_id: userId,
+            professor_id: parseInt(professorId),
+            draft_id: draft.data.id,
+            type: "first",
+            tracking_id: trackingId,
+          },
+        ]);
+
+      if (insertionError) {
+        return res.status(400).json({ message: "Insertion Error" });
+      }
+
+      return res.status(200).json({ draftId: draft.data.id });
+    } catch {
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  }
+);
+ */

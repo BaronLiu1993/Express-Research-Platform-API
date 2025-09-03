@@ -4,10 +4,9 @@ import { verifyToken } from "../../../services/authServices.js";
 const router = express.Router();
 
 router.get(
-  "/repository/get-all-savedId/:userId",
+  "/repository/get-all-savedId",
   verifyToken,
   async (req, res) => {
-    console.log("fired");
 
     const userId = req.user.sub;
     try {
@@ -16,12 +15,14 @@ router.get(
           .from("Saved")
           .select("professor_id")
           .eq("user_id", userId);
+
       if (professorIdFetchError) {
         return res.status(400).json({ message: "Failed to Fetch" });
       }
+      console.log(professorIdData)
       const professorIds = professorIdData.map((item) => item.professor_id);
       return res.status(200).json({ data: professorIds });
-    } catch {
+    } catch (err) {
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }

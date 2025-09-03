@@ -4,6 +4,22 @@ import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
+router.get("/completed-follow-data", verifyToken, async (req, res) => {
+  const userId = req.user.sub
+  try {
+    const { data: completedData, error: completedDataFetchError} = await req.supabaseClient
+      .from("Emails")
+      .select("thread_id, professor_id, thread_id, name, email")
+      .eq("user_id", userId)
+      .eq("type", "first")
+      .eq("sent", false)
+    
+
+  } catch {
+    return res.status(500).json({message: "Failed to Get"})
+  }
+})
+
 router.get("/kanban/get-completed/:userId", verifyToken, async (req, res) => {
   const userId = req.user.sub;
 
