@@ -3,7 +3,7 @@ import { google } from "googleapis";
 import dotenv from "dotenv";
 import { uploadInstance } from "./storageMiddleware.js";
 import { Readable } from "node:stream";
-import { verifyToken } from "../../services/authServices.js";
+import { decryptToken, verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 dotenv.config();
@@ -109,7 +109,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
         access_token: tokenData.gmail_auth_token,
         refresh_token: tokenData.gmail_refresh_token,
       });
-      
+
       const drive = google.drive({ version: "v3", auth: oauth2Client });
       const response = await drive.files.create({
         requestBody: {
@@ -156,8 +156,8 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
     }
 
     oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
+      access_token: decryptToken(tokenData.gmail_auth_token),
+      refresh_token: decryptToken(tokenData.gmail_refresh_token),
     });
 
     try {
@@ -191,7 +191,8 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
     });
 
     return res.status(200).json({ success: true, data: response.data });
-  } catch {
+  } catch (err) {
+    console.log(err)
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
@@ -210,8 +211,8 @@ router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
       return res.status(401).json({ updated: false });
     }
     oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
+      access_token: decryptToken(tokenData.gmail_auth_token),
+      refresh_token: decryptToken(tokenData.gmail_refresh_token),
     });
 
     const { data: transcriptData, error: transcriptDataFetchError } =
@@ -221,6 +222,12 @@ router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
         .eq("user_id", userId)
         .single();
 
+        if (transcriptDataFetchError|| !transcriptData.transcript) {
+          return res.status(200).json({
+            success: false,
+            reauthRequired: false,
+          });
+        }
     if (transcriptDataFetchError) {
       return res
         .status(200)
@@ -234,6 +241,7 @@ router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
     });
     return res.status(200).json({ success: true, data: response.data });
   } catch (err) {
+    console.log(err)
     return res
       .status(500)
       .json({ success: false, message: "Internal Server Error" });

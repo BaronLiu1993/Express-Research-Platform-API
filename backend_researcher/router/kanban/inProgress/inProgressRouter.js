@@ -49,12 +49,14 @@ router.get("/kanban/get-in-progress/:userId", verifyToken, async (req, res) => {
 
 router.get("/fetch/draft/:userId", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  console.log(userId)
   try {
     const { data: draftData, error: fetchError } = await req.supabaseClient
       .from("Emails")
       .select("draft_id, professor_id")
       .eq("user_id", userId)
       .eq("type", "draft");
+
     let totalDraftData = [];
     await Promise.all(
       draftData.map(async (prof) => {
@@ -83,7 +85,6 @@ router.get("/fetch/draft/:userId", verifyToken, async (req, res) => {
     }
     return res.status(200).json({ data: totalDraftData });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });

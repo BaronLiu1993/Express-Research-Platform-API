@@ -5,7 +5,7 @@ import { makeReplyBody } from "../../services/googleServices.js";
 import { makeBody } from "../../services/googleServices.js";
 
 import { v4 as uuidv4 } from "uuid";
-import { verifyToken } from "../../services/authServices.js";
+import { decryptToken, verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 
@@ -417,7 +417,8 @@ router.post(
 
 //Require someone to delete the workflow first and then restart again
 
-router.get("/resume-draft/:draftId/:userId", verifyToken, async (req, res) => {
+router.get("/resume-draft/:draftId", verifyToken, async (req, res) => {
+  console.log("fired")
   const { draftId } = req.params;
   const userId = req.user.sub;
 
@@ -443,8 +444,8 @@ router.get("/resume-draft/:draftId/:userId", verifyToken, async (req, res) => {
   }
 
   oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
+    access_token: decryptToken(tokenData.gmail_auth_token),
+    refresh_token: decryptToken(tokenData.gmail_refresh_token),
   });
 
   try {
@@ -472,7 +473,7 @@ router.get("/resume-draft/:draftId/:userId", verifyToken, async (req, res) => {
     if (error.response?.data?.error?.code === 401) {
       return res.status(200).json({ draftExists: false });
     }
-
+    console.log(error)
     return res.status(500).json({ draftExists: false });
   }
 });
