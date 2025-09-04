@@ -51,9 +51,10 @@ router.post(
           userName,
           accessToken: req.token,
           body: {
+            threadId: professor.thread_id,
             professorId: professor.professor_id,
-            professorEmail: professor.email,
-            professorName: professor.name,
+            professorEmail: professor.professor_email,
+            professorName: professor.professor_name,
           },
         },
       }));
@@ -70,8 +71,7 @@ router.post(
 router.post("/mass-send-followup", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-  console.log("fired token")
-  console.log(req.token)
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-draft-email",

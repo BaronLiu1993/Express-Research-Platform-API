@@ -30,7 +30,7 @@ router.post("/insert/:userId", verifyToken, async (req, res) => {
         })
         .select()
         .single();
-    
+
     if (insertionError) {
       return res.status(400).json({ message: "Failed To Insert" });
     }
@@ -105,7 +105,82 @@ router.post(
         const resultEntry = {
           id: professorId,
           email: constantData.email,
-          name: constantData.name
+          name: constantData.name,
+        };
+
+        if (Object.keys(dynamicFields).length > 0) {
+          resultEntry.dynamicFields = dynamicFields;
+        }
+
+        result.push(resultEntry);
+      }
+
+      return res.status(200).json({ result, status: "synced" });
+    } catch {
+      return res.status(500).json({
+        message: "Internal Server Error",
+        status: "failed",
+      });
+    }
+  }
+);
+
+router.post(
+  "/sync-fetchable-variables/follow-up",
+  verifyToken,
+  async (req, res) => {
+    const { variableArray, professorIdArray } = req.body;
+    if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
+      return res.status(400).json({ message: "Invalid input arrays" });
+    }
+
+    if (variableArray.length === 0 || professorIdArray.length === 0) {
+      return res.status(400).json({ message: "User Sent Nothing" });
+    }
+
+    const newVariableArray = variableArray.map(removeBracketPlaceholders);
+    const result = [];
+
+    try {
+      for (let i = 0; i < professorIdArray.length; i++) {
+        const professorId = professorIdArray[i]["professor_id"];
+        const threadId = professorIdArray[i]["thread_id"];
+        const email = professorIdArray[i]["professor_email"];
+        const name = professorIdArray[i]["professor_name"];
+
+        const filteredFields = newVariableArray.filter(
+          (v) => v !== "publications"
+        );
+
+        let variableData = {};
+        if (filteredFields.length > 0) {
+          const { data, error: variableError } = await req.supabaseClient
+            .from("Taishan")
+            .select(filteredFields.join())
+            .eq("id", professorId)
+            .single();
+
+          variableData = data || {};
+        }
+
+        let publicationData;
+        if (newVariableArray.includes("publications")) {
+          publicationData = "";
+        }
+
+        const dynamicFields = {};
+        if (Object.keys(variableData).length > 0) {
+          Object.assign(dynamicFields, variableData);
+        }
+        if (publicationData !== undefined) {
+          dynamicFields.publications = publicationData;
+        }
+
+        const resultEntry = {
+          id: professorId,
+          email: email,
+          name: name,
+          threadId: threadId,
         };
 
         if (Object.keys(dynamicFields).length > 0) {
