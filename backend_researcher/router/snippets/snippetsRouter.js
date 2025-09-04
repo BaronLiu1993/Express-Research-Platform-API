@@ -1,4 +1,3 @@
-import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { verifyToken } from "../../services/authServices.js";
 
@@ -43,7 +42,7 @@ router.post("/insert/:userId", verifyToken, async (req, res) => {
 });
 
 router.post(
-  "/sync-fetchable-variables/:userId",
+  "/sync-fetchable-variables",
   verifyToken,
   async (req, res) => {
     const { variableArray, professorIdArray } = req.body;
@@ -130,15 +129,25 @@ router.post(
   verifyToken,
   async (req, res) => {
     const { variableArray, professorIdArray } = req.body;
+
+    console.log("Incoming request body:", {
+      variableArray,
+      professorIdArray,
+    });
+
     if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
+      console.error("Invalid input arrays", { variableArray, professorIdArray });
       return res.status(400).json({ message: "Invalid input arrays" });
     }
 
     if (variableArray.length === 0 || professorIdArray.length === 0) {
+      console.warn("Empty arrays received");
       return res.status(400).json({ message: "User Sent Nothing" });
     }
 
     const newVariableArray = variableArray.map(removeBracketPlaceholders);
+    console.log("Processed variableArray ->", newVariableArray);
+
     const result = [];
 
     try {
@@ -148,9 +157,17 @@ router.post(
         const email = professorIdArray[i]["professor_email"];
         const name = professorIdArray[i]["professor_name"];
 
+        console.log(`\nProcessing professor #${i}:`, {
+          professorId,
+          threadId,
+          email,
+          name,
+        });
+
         const filteredFields = newVariableArray.filter(
           (v) => v !== "publications"
         );
+        console.log("Filtered fields:", filteredFields);
 
         let variableData = {};
         if (filteredFields.length > 0) {
@@ -160,12 +177,15 @@ router.post(
             .eq("id", professorId)
             .single();
 
+          console.log("Supabase variableData result:", { data, variableError });
+
           variableData = data || {};
         }
 
         let publicationData;
         if (newVariableArray.includes("publications")) {
           publicationData = "";
+          console.log("Publications requested -> setting empty string for now");
         }
 
         const dynamicFields = {};
@@ -176,22 +196,28 @@ router.post(
           dynamicFields.publications = publicationData;
         }
 
+        console.log("Final dynamicFields for this professor:", dynamicFields);
+
         const resultEntry = {
           id: professorId,
-          email: email,
-          name: name,
-          threadId: threadId,
+          email,
+          name,
+          threadId,
         };
 
         if (Object.keys(dynamicFields).length > 0) {
           resultEntry.dynamicFields = dynamicFields;
         }
 
+        console.log("Result entry being pushed:", resultEntry);
         result.push(resultEntry);
       }
 
+      console.log("Final result array:", result);
+
       return res.status(200).json({ result, status: "synced" });
-    } catch {
+    } catch (err) {
+      console.error("Error in follow-up sync:", err);
       return res.status(500).json({
         message: "Internal Server Error",
         status: "failed",
@@ -199,5 +225,6 @@ router.post(
     }
   }
 );
+
 
 export default router;
