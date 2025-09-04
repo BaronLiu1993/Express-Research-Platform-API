@@ -438,10 +438,17 @@ export async function sendFollowUpEmail({
   userEmail,
   userName,
   body,
-  threadId,
-  supabase,
+  accessToken,
 }) {
   try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    });
+
     const gmail = await configureOAuth({ userId, supabase });
     //body should have draftId
 
@@ -466,7 +473,7 @@ export async function sendFollowUpEmail({
       from: userEmail,
       subject: subject,
       html: finalHtmlBody,
-      inReplyToMessageId: threadId,
+      inReplyToMessageId: body.threadId,
     });
 
     await gmail.users.drafts.update({
@@ -484,22 +491,34 @@ export async function sendFollowUpEmail({
     });
 
     // Update Supabase email status
-    const { error: insertionError } = await supabase
+    const { error: emailInsertionError } = await supabase
       .from("Emails")
       .update({
         sent: true,
         type: "followup",
         thread_id: sendResponse.data.threadId,
+        professor_name: body.professorName,
+        professor_email: body.professorEmail,
       })
       .eq("draft_id", body.draftId);
 
-    await supabase.from("Messages").insert({
-      user_id: userId,
-      thread_id: sendResponse.data.threadId,
-      message_id: sendResponse.data.id,
-      tracking_id: draftData.tracking_id,
-      type: "followup",
-    });
+    if (emailInsertionError) {
+      throw new Error("Emails Insertion Error");
+    }
+
+    const { error: messageInsertionError } = await supabase
+      .from("Messages")
+      .insert({
+        user_id: userId,
+        thread_id: sendResponse.data.threadId,
+        message_id: sendResponse.data.id,
+        tracking_id: draftData.tracking_id,
+        type: "followup",
+      });
+
+    if (messageInsertionError) {
+      throw new Error("Message Insertion Error");
+    }
 
     return { message: "Successfully Sent!" };
   } catch (err) {
@@ -512,10 +531,23 @@ export async function sendFollowUpWithAttachments({
   userEmail,
   userName,
   body,
-  threadId,
+  accessToken,
 }) {
   try {
-    const oAuthObject = await configureOAuth(userId, supabase, true);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    });
+    
+    const oAuthObject = await configureOAuth({
+      userId,
+      supabase,
+      fetchDrive: true,
+    });
+
     const drive = oAuthObject.drive;
     const gmail = oAuthObject.gmail;
 
@@ -529,6 +561,10 @@ export async function sendFollowUpWithAttachments({
       .select("resume, transcript")
       .eq("user_id", userId)
       .single();
+
+    if (fileDataError || !fileData) {
+      throw new Error("Failed To Find Files To Attach and Send");
+    }
 
     let emailAttachments = [];
     if (fileData.resume) {
@@ -572,8 +608,8 @@ export async function sendFollowUpWithAttachments({
       name: userName,
       subject,
       html: finalHtmlBody,
-      inReplyToMessageId: threadId,
-      emailAttachments: attachments,
+      inReplyToMessageId: body.threadId,
+      emailAttachments: emailAttachments,
     });
 
     await gmail.users.drafts.update({
@@ -587,38 +623,35 @@ export async function sendFollowUpWithAttachments({
       requestBody: { id: body.draftId },
     });
 
-    await supabase
+    const { error: emailInsertionError } = await supabase
       .from("Emails")
       .update({
         sent: true,
         type: "followup",
         thread_id: sendResponse.data.threadId,
+        professor_name: body.professorName,
+        professor_email: body.professorEmail,
       })
       .eq("draft_id", body.draftId);
 
-    const { data: inProgressData } = await supabase
-      .from("InProgress")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("professor_id", body.professorId)
-      .single();
-
-    if (inProgressData) {
-      await supabase.from("Completed").insert(inProgressData);
-      await supabase
-        .from("InProgress")
-        .delete()
-        .eq("user_id", userId)
-        .eq("professor_id", body.professorId);
+    if (emailInsertionError) {
+      throw new Error("Failed To Insert into Emails");
     }
 
-    await supabase.from("Messages").insert({
-      user_id: userId,
-      thread_id: sendResponse.data.threadId,
-      message_id: sendResponse.data.id,
-      tracking_id: draftData.tracking_id,
-      type: "followup",
-    });
+    const { error: messageInsertionError } = await supabase
+      .from("Messages")
+      .insert({
+        user_id: userId,
+        thread_id: sendResponse.data.threadId,
+        message_id: sendResponse.data.id,
+        tracking_id: draftData.tracking_id,
+        type: "followup",
+      });
+
+    if (messageInsertionError) {
+      throw new Error("Failed to Insert Message");
+    }
+
     return { message: "Successfully Sent!" };
   } catch {
     return { message: "Internal Server Error" };
