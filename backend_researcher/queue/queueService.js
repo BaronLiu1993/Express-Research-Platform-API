@@ -443,14 +443,6 @@ export async function sendFollowUpEmail({
   accessToken,
 }) {
   try {
-    console.log("sendFollowUpEmail called with:", {
-      userId,
-      userEmail,
-      userName,
-      body,
-      accessToken: accessToken,
-    });
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: {
@@ -458,17 +450,12 @@ export async function sendFollowUpEmail({
         },
       },
     });
-    console.log("Supabase client created");
 
     const gmail = await configureOAuth({ userId, supabase });
-    console.log("Gmail client configured");
 
     let draftData = null;
-    let draftDataError = null;
 
     for (let attempt = 1; attempt <= 3; attempt++) {
-      console.log(`Fetching draftData (attempt ${attempt}/3)`);
-
       const { data, error } = await supabase
         .from("Emails")
         .select("draft_id, tracking_id")
@@ -478,14 +465,10 @@ export async function sendFollowUpEmail({
         .single();
 
       draftData = data;
-      draftDataError = error;
 
       if (!error && data) {
-        console.log("draftData fetched successfully:", draftData);
-        break; // success, exit loop
+        break;
       }
-
-      console.warn(`Draft fetch failed (attempt ${attempt}):`, error);
 
       if (attempt < 3) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -496,25 +479,19 @@ export async function sendFollowUpEmail({
       throw new Error("Failed to fetch draftData after 3 attempts");
     }
 
-    console.log("Building tracking pixel with draftData:", draftData.draft_id);
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
 
     // Get draft from Gmail
-    console.log("Fetching draft with ID:", draftData.draft_id);
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
 
-    console.log("Draft fetched:", draft.data);
-
     const payload = draft.data.message.payload;
     const headers = payload.headers || [];
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
-    console.log("Email subject:", subject);
 
     const htmlBody = extractHtmlOrPlainText(payload);
-    console.log("Extracted HTML body length:", htmlBody?.length);
 
     const finalHtmlBody = htmlBody + trackingPixel;
 
@@ -526,7 +503,6 @@ export async function sendFollowUpEmail({
       html: finalHtmlBody,
       inReplyToMessageId: body.threadId,
     });
-    console.log("Reply body created");
 
     // Update draft
     await gmail.users.drafts.update({
@@ -534,7 +510,6 @@ export async function sendFollowUpEmail({
       id: draftData.draft_id,
       requestBody: { message: { raw } },
     });
-    console.log("Draft updated with new content");
 
     // Send the draft
     const sendResponse = await gmail.users.drafts.send({
@@ -543,7 +518,6 @@ export async function sendFollowUpEmail({
         id: draftData.draft_id,
       },
     });
-    console.log("Draft sent:", sendResponse.data);
 
     // Update Emails table
     const { error: emailInsertionError } = await supabase
@@ -558,12 +532,9 @@ export async function sendFollowUpEmail({
       .eq("draft_id", sendResponse.data.id);
 
     if (emailInsertionError) {
-      console.error("Emails insertion error:", emailInsertionError);
       throw new Error("Emails Insertion Error");
     }
-    console.log("Emails table updated");
 
-    // Insert into Messages
     const { error: messageInsertionError } = await supabase
       .from("Messages")
       .insert({
@@ -575,14 +546,11 @@ export async function sendFollowUpEmail({
       });
 
     if (messageInsertionError) {
-      console.error("Messages insertion error:", messageInsertionError);
       throw new Error("Message Insertion Error");
     }
-    console.log("Message inserted into Messages");
 
     return { message: "Successfully Sent!" };
   } catch (err) {
-    console.error("sendFollowUpEmail failed:", err);
     return { message: "Failed to send follow-up email" };
   }
 }
