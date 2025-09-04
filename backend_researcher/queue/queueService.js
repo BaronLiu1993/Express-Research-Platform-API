@@ -372,7 +372,6 @@ export async function generateFollowUpDraftSnippetEmail({
   const trackingId = uuidv4();
 
   try {
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: {
@@ -380,7 +379,6 @@ export async function generateFollowUpDraftSnippetEmail({
         },
       },
     });
-   
 
     const gmail = await configureOAuth({ userId, supabase });
 
@@ -410,12 +408,11 @@ export async function generateFollowUpDraftSnippetEmail({
       inReplyToMessageId: threadId,
     });
 
-   
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw } },
     });
-   
+
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
         user_id: userId,
@@ -426,7 +423,6 @@ export async function generateFollowUpDraftSnippetEmail({
         tracking_id: trackingId,
       },
     ]);
-
 
     if (insertionError) {
       throw new Error("Email Insertion Error");
@@ -467,14 +463,47 @@ export async function sendFollowUpEmail({
     const gmail = await configureOAuth({ userId, supabase });
     console.log("Gmail client configured");
 
-    console.log("Building tracking pixel with draftData:", body.draftId);
+    let draftData = null;
+    let draftDataError = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log(`Fetching draftData (attempt ${attempt}/3)`);
+
+      const { data, error } = await supabase
+        .from("Emails")
+        .select("draft_id, tracking_id")
+        .eq("professor_id", parseInt(body.professorId))
+        .eq("type", "followupdraft")
+        .eq("sent", false)
+        .single();
+
+      draftData = data;
+      draftDataError = error;
+
+      if (!error && data) {
+        console.log("draftData fetched successfully:", draftData);
+        break; // success, exit loop
+      }
+
+      console.warn(`Draft fetch failed (attempt ${attempt}):`, error);
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    if (!draftData) {
+      throw new Error("Failed to fetch draftData after 3 attempts");
+    }
+
+    console.log("Building tracking pixel with draftData:", draftData.draft_id);
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
 
     // Get draft from Gmail
-    console.log("Fetching draft with ID:", body.draftId);
+    console.log("Fetching draft with ID:", draftData.draft_id);
     const draft = await gmail.users.drafts.get({
       userId: "me",
-      id: body.draftId,
+      id: draftData.draft_id,
     });
 
     console.log("Draft fetched:", draft.data);
@@ -489,7 +518,7 @@ export async function sendFollowUpEmail({
 
     const finalHtmlBody = htmlBody + trackingPixel;
 
-    const raw = makeReplyBody({
+    const raw = await makeReplyBody({
       to: body.professorEmail,
       name: userName,
       from: userEmail,
@@ -502,7 +531,7 @@ export async function sendFollowUpEmail({
     // Update draft
     await gmail.users.drafts.update({
       userId: "me",
-      id: body.draftId,
+      id: draftData.draft_id,
       requestBody: { message: { raw } },
     });
     console.log("Draft updated with new content");
@@ -511,7 +540,7 @@ export async function sendFollowUpEmail({
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: {
-        id: body.draftId,
+        id: draftData.draft_id,
       },
     });
     console.log("Draft sent:", sendResponse.data);
@@ -526,7 +555,7 @@ export async function sendFollowUpEmail({
         professor_name: body.professorName,
         professor_email: body.professorEmail,
       })
-      .eq("draft_id", body.draftId);
+      .eq("draft_id", sendResponse.data.id);
 
     if (emailInsertionError) {
       console.error("Emails insertion error:", emailInsertionError);
