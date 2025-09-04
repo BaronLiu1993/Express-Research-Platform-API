@@ -370,6 +370,21 @@ export async function generateFollowUpDraftSnippetEmail({
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail } = body;
   try {
+    // 🔍 Debug inputs
+    console.log("generateFollowUpDraftSnippetEmail called with:", {
+      userId,
+      professorId,
+      snippetId,
+      accessToken,
+    });
+
+    // Check if token looks like a JWT
+    if (accessToken) {
+      console.log("accessToken parts:", accessToken.split(".").length);
+    } else {
+      console.log("No accessToken provided!");
+    }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: {
@@ -377,16 +392,23 @@ export async function generateFollowUpDraftSnippetEmail({
         },
       },
     });
+    console.log("Supabase client created with Bearer token");
+
     const gmail = await configureOAuth({ userId, supabase });
+    console.log("Gmail client configured");
+
     // Fetch Snippet
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
       .select("*")
       .eq("user_id", userId)
-      .eq("id", snippetId)
+      .eq("id", snippetId.snippetId)
       .single();
 
+    console.log("Snippet fetch result:", { snippetData, snippetError });
+
     if (snippetError) {
+      console.error("Snippet Fetching Error:", snippetError);
       throw new Error("Snippet Fetching Error");
     }
 
@@ -401,14 +423,17 @@ export async function generateFollowUpDraftSnippetEmail({
       name: fromName,
       subject,
       html,
-      inReplyToMessageId,
+      inReplyToMessageId: body.thread_id,
     });
+
+    console.log("Raw Gmail message constructed");
 
     // Create Gmail Draft
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw } },
     });
+    console.log("Draft created:", draft.data.id);
 
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
@@ -417,19 +442,24 @@ export async function generateFollowUpDraftSnippetEmail({
         draft_id: draft.data.id,
         sent: false,
         type: "followupdraft",
-        tracking_id: trackingId,
+        tracking_id: trackingId, // 👈 also make sure this is defined
       },
     ]);
 
+    console.log("Insertion result:", insertionError);
+
     if (insertionError) {
-      throw new Error("Insertion Error");
+      console.error("Email Insertion Error:", insertionError);
+      throw new Error("Email Insertion Error");
     }
 
     return { message: "Draft successfully created" };
   } catch (err) {
+    console.error("Error in generateFollowUpDraftSnippetEmail:", err);
     return { message: "Failed to create draft" };
   }
 }
+
 
 //Sending Function
 
@@ -450,7 +480,6 @@ export async function sendFollowUpEmail({
     });
 
     const gmail = await configureOAuth({ userId, supabase });
-    //body should have draftId
 
     // Build tracking pixel
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
@@ -541,7 +570,7 @@ export async function sendFollowUpWithAttachments({
         },
       },
     });
-    
+
     const oAuthObject = await configureOAuth({
       userId,
       supabase,

@@ -19,7 +19,7 @@ router.post("/snippet-create-followup-draft", verifyToken, async (req, res) => {
       data: {
         userId,
         professorId: professor.id,
-        accessToken: accessToken,
+        accessToken: req.token,
         body: {
           ...baseBody,
           dynamicFields: professor.dynamicFields,
@@ -70,6 +70,8 @@ router.post(
 router.post("/mass-send-followup", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
+  console.log("fired token")
+  console.log(req.token)
   try {
     const jobs = professorData.map((professor) => ({
       name: "follow-up-draft-email",

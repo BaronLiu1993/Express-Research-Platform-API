@@ -6,11 +6,16 @@ import { generateFollowUpDraftSnippetEmail } from "./queueService.js";
 export const followUpWorker = new Worker(
   "follow-up-draft-email",
   async (job) => {
-    const { userId, professorId, body } = job.data;
+    const { userId, professorId, body, accessToken } = job.data;
     try {
-      await generateFollowUpDraftSnippetEmail({ userId, professorId, body });
+      await generateFollowUpDraftSnippetEmail({
+        userId,
+        professorId,
+        body,
+        accessToken,
+      });
     } catch (err) {
-      throw err; 
+      throw err;
     }
   },
   {
@@ -20,11 +25,16 @@ export const followUpWorker = new Worker(
 );
 
 followUpWorker.on("completed", (job) => {
-  console.log(`[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`);
+  console.log(
+    `[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`
+  );
 });
 
 followUpWorker.on("failed", (job, err) => {
-  console.error(`🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`, err.message);
+  console.error(
+    `🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`,
+    err.message
+  );
 });
 
 followUpWorker.on("active", (job) => {

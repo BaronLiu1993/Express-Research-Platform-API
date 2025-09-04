@@ -6,11 +6,17 @@ import { Connection } from "../redis/redis.js";
 export const followUpWorkerWithAttachments = new Worker(
   "follow-up-email-with-attachments",
   async (job) => {
-    const { userId, userEmail, userName, body } = job.data;
+    const { userId, userEmail, userName, body, accessToken } = job.data;
     try {
-      await sendFollowUpWithAttachments({ userId, userEmail, userName, body });
-    } catch (err) {
-      throw err; 
+      await sendFollowUpWithAttachments({
+        userId,
+        userEmail,
+        userName,
+        body,
+        accessToken,
+      });
+    } catch {
+      throw new Error("Internal Server Error");
     }
   },
   {
@@ -20,11 +26,16 @@ export const followUpWorkerWithAttachments = new Worker(
 );
 
 followUpWorkerWithAttachments.on("completed", (job) => {
-  console.log(`[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`);
+  console.log(
+    `[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`
+  );
 });
 
 followUpWorkerWithAttachments.on("failed", (job, err) => {
-  console.error(`🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`, err.message);
+  console.error(
+    `🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`,
+    err.message
+  );
 });
 
 followUpWorkerWithAttachments.on("active", (job) => {

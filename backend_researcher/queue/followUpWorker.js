@@ -6,11 +6,17 @@ import { Connection } from "../redis/redis.js";
 export const followUpWorker = new Worker(
   "follow-up-email",
   async (job) => {
-    const { userId, userEmail, userName, body } = job.data;
+    const { userId, userEmail, userName, body, accessToken } = job.data;
     try {
-      await sendFollowUpEmail({ userId, userEmail, userName, body });
+      await sendFollowUpEmail({
+        userId,
+        userEmail,
+        userName,
+        body,
+        accessToken,
+      });
     } catch (err) {
-      throw err;
+      throw new Error("Internal Server Error")
     }
   },
   {
@@ -37,10 +43,7 @@ followUpWorker.on("active", (job) => {
 });
 
 followUpWorker.on("progress", (job, progress) => {
-  console.log(
-    `[Worker] Job progress:`,
-    progress
-  );
+  console.log(`[Worker] Job progress:`, progress);
 });
 
 followUpWorker.on("stalled", (jobId) => {
