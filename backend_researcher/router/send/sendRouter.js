@@ -141,7 +141,6 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
           professorId: professor.id,
           professorEmail: professor.professor_email,
           professorName: professor.professor_name,
-          threadId: professor.thread_id,
         },
       },
     }));
