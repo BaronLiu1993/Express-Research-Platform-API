@@ -14,7 +14,7 @@ const SUPABASE_JWT_ALGORITHM = process.env.SUPABASE_JWT_ALGORITHM;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-const secretKey = process.env.GMAIL_SECRET_KEY
+const secretKey = process.env.GMAIL_SECRET_KEY;
 
 const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
@@ -23,8 +23,8 @@ const OPEN_AI = new OpenAI({
 //Encrypt Into Database
 export function encryptToken(token) {
   try {
-    const encryptedToken = CryptoJS.AES.encrypt(token, secretKey).toString()
-    return encryptedToken
+    const encryptedToken = CryptoJS.AES.encrypt(token, secretKey).toString();
+    return encryptedToken;
   } catch {
     return;
   }
@@ -34,7 +34,7 @@ export function encryptToken(token) {
 export function decryptToken(token) {
   try {
     const bytes = CryptoJS.AES.decrypt(token, secretKey);
-    const decryptedToken = bytes.toString(CryptoJS.enc.Utf8); 
+    const decryptedToken = bytes.toString(CryptoJS.enc.Utf8);
     return decryptedToken;
   } catch {
     return;
@@ -52,7 +52,6 @@ export async function generateEmbeddings(research_input_embeddings) {
 //Refresh In Here
 export async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
-
   if (!authHeader) {
     return res.status(401).json({ message: "Missing Authorization header" });
   }
@@ -75,7 +74,7 @@ export async function verifyToken(req, res, next) {
         },
       },
     });
-
+    console.log("success");
     req.user = payload;
     req.token = token;
     req.supabaseClient = supabaseClient;

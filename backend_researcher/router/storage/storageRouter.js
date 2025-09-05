@@ -14,7 +14,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
-router.get("/get-file-links/:userId", verifyToken, async (req, res) => {
+router.get("/get-file-links", verifyToken, async (req, res) => {
   const { userId } = req.params;
   try {
     const { data: linkData, error: fetchDataError } = await req.supabaseClient
@@ -34,7 +34,7 @@ router.get("/get-file-links/:userId", verifyToken, async (req, res) => {
 
 //Uploading Transcripts
 
-router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.single("file"), async (req, res) => {
+router.post("/upload-transcript-links", verifyToken, uploadInstance.single("file"), async (req, res) => {
     const { userId } = req.params;
     const file = req.file;
     const bufferStream = new Readable();
@@ -85,7 +85,7 @@ router.post("/upload-transcript-links/:userId", verifyToken, uploadInstance.sing
 );
 
 //Uploading Resumes
-router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("file"),
+router.post("/upload-resume-links", verifyToken, uploadInstance.single("file"),
   async (req, res) => {
     const userId = req.user.sub;
     const file = req.file;
@@ -138,7 +138,7 @@ router.post("/upload-resume-links/:userId", verifyToken, uploadInstance.single("
   }
 );
 
-router.get("/get-resume/:userId", verifyToken, async (req, res) => {
+router.get("/get-resume", verifyToken, async (req, res) => {
   const userId = req.user.sub;
 
   try {
@@ -198,7 +198,7 @@ router.get("/get-resume/:userId", verifyToken, async (req, res) => {
 });
 
 
-router.get("/get-transcript/:userId", verifyToken, async (req, res) => {
+router.get("/get-transcript", verifyToken, async (req, res) => {
   const userId = req.user.sub
   try {
     const { data: tokenData, error: tokenFetchError } = await req.supabaseClient

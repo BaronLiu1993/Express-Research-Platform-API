@@ -9,16 +9,26 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
+export function decodeBody(encoded) {
+  let padded = encoded;
+  while (padded.length % 4 !== 0) {
+    padded += "=";
+  }
+  padded = padded.replace(/-/g, "+").replace(/_/g, "/");
+  const buffer = Buffer.from(padded, "base64");
+  return buffer.toString("utf-8");
+}
+
 export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
-  console.log("test")
-  console.log(userId)
+  console.log("test");
+  console.log(userId);
   try {
     const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
- 
+
     if (tokenError || !tokenData) {
       throw new Error("No tokens found for user");
     }
@@ -109,6 +119,7 @@ export async function makeReplyBody({
   const formattedFrom = name ? `"${name}" <${from}>` : from;
 
   const headers = {};
+
   if (inReplyToMessageId) {
     headers["In-Reply-To"] = inReplyToMessageId;
     headers["References"] = inReplyToMessageId;
@@ -148,19 +159,22 @@ export async function makeBody({
   attachments = [],
 }) {
   const formattedFrom = name ? `"${name}" <${from}>` : from;
+  const textFallback = html.replace(/<[^>]*>/g, "");
 
   const mail = new MailComposer({
     to,
     from: formattedFrom,
     subject,
     html,
-    text: "",
+    text: textFallback,
     attachments,
   });
 
   return new Promise((resolve, reject) => {
     mail.compile().build((err, message) => {
-      if (err) return reject(err);
+      if (err) {
+        return reject(err);
+      }
 
       const encodedMessage = message
         .toString("base64")
@@ -171,14 +185,4 @@ export async function makeBody({
       resolve(encodedMessage);
     });
   });
-}
-
-export function decodeBody(encoded) {
-  let padded = encoded;
-  while (padded.length % 4 !== 0) {
-    padded += "=";
-  }
-  padded = padded.replace(/-/g, "+").replace(/_/g, "/");
-  const buffer = Buffer.from(padded, "base64");
-  return buffer.toString("utf-8");
 }

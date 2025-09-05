@@ -19,6 +19,8 @@ export async function generateDraftFromSnippetEmail({
   accessToken,
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail, toName } = body;
+  console.log(fromEmail);
+  console.log(fromName); //get the fromname to work and the fromemail it is not passing through for some reason
   const trackingId = uuidv4();
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -62,6 +64,8 @@ export async function generateDraftFromSnippetEmail({
       requestBody: { message: { raw } },
     });
 
+    console.log(draft);
+
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
         user_id: userId,
@@ -69,11 +73,14 @@ export async function generateDraftFromSnippetEmail({
         draft_id: draft.data.id,
         sent: false,
         type: "draft",
+        thread_id: draft.data.message.threadId,
         tracking_id: trackingId,
         professor_email: to,
         professor_name: toName,
       },
     ]);
+
+    console.log(insertionError);
 
     if (insertionError) {
       throw new Error("Failed to Insert");
@@ -111,6 +118,8 @@ export async function sendSnippetEmail({
   body,
   accessToken,
 }) {
+  console.log(userEmail);
+  console.log(userName);
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
       headers: {
@@ -118,6 +127,9 @@ export async function sendSnippetEmail({
       },
     },
   });
+
+  console.log(userEmail);
+  console.log(userName);
 
   try {
     const gmail = await configureOAuth({ userId, supabase });
@@ -143,6 +155,9 @@ export async function sendSnippetEmail({
     });
 
     const payload = draft.data.message.payload;
+    const parentMessageIdHeader = payload.headers.find(
+      (h) => h.name.toLowerCase() === "message-id"
+    ).value;
     const headers = payload.headers;
     const subject = headers.find((h) => h.name === "Subject")?.value;
     const htmlBody = extractHtmlOrPlainText(payload);
@@ -169,12 +184,16 @@ export async function sendSnippetEmail({
       },
     });
 
+    console.log(sendResponse);
+
     const { error: insertionError } = await supabase
       .from("Emails")
       .update({
         sent: true,
         type: "first",
+        message_id: sendResponse.data.id,
         thread_id: sendResponse.data.threadId,
+        message_id: parentMessageIdHeader,
       })
       .eq("draft_id", draftData.draft_id);
 
@@ -327,6 +346,7 @@ export async function sendSnippetEmailWithAttachments({
       .update({
         sent: true,
         type: "first",
+        message_id: sendResponse.data.id,
         thread_id: sendResponse.data.threadId,
       })
       .eq("draft_id", draftData.draft_id);
@@ -368,7 +388,15 @@ export async function generateFollowUpDraftSnippetEmail({
   body,
   accessToken,
 }) {
-  const { snippetId, dynamicFields, to, fromName, fromEmail, threadId } = body;
+  const {
+    snippetId,
+    dynamicFields,
+    to,
+    fromName,
+    fromEmail,
+    threadId,
+    messageId,
+  } = body;
   const trackingId = uuidv4();
 
   try {
@@ -405,7 +433,7 @@ export async function generateFollowUpDraftSnippetEmail({
       name: fromName,
       subject,
       html,
-      inReplyToMessageId: threadId,
+      inReplyToMessageId: messageId,
     });
 
     const draft = await gmail.users.drafts.create({
@@ -418,6 +446,7 @@ export async function generateFollowUpDraftSnippetEmail({
         user_id: userId,
         professor_id: parseInt(professorId),
         draft_id: draft.data.id,
+        thread_id: threadId,
         sent: false,
         type: "followupdraft",
         tracking_id: trackingId,
@@ -443,6 +472,14 @@ export async function sendFollowUpEmail({
   accessToken,
 }) {
   try {
+    console.log("sendFollowUpEmail called with:", {
+      userId,
+      userEmail,
+      userName,
+      body,
+      accessToken,
+    });
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: {
@@ -451,11 +488,17 @@ export async function sendFollowUpEmail({
       },
     });
 
+    console.log("Supabase client initialized");
+
     const gmail = await configureOAuth({ userId, supabase });
+    console.log("Gmail OAuth configured");
 
     let draftData = null;
+    let draftError = null;
 
     for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log(`Fetching draftData attempt ${attempt}/3`);
+
       const { data, error } = await supabase
         .from("Emails")
         .select("draft_id, tracking_id")
@@ -465,35 +508,47 @@ export async function sendFollowUpEmail({
         .single();
 
       draftData = data;
+      draftError = error;
 
       if (!error && data) {
+        console.log("draftData fetched successfully:", draftData);
         break;
       }
 
+      console.warn("Draft fetch failed:", error);
+
       if (attempt < 3) {
+        console.log("Retrying after 1 second...");
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
     if (!draftData) {
+      console.error("Failed to fetch draftData after 3 attempts");
       throw new Error("Failed to fetch draftData after 3 attempts");
     }
 
     const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
+    console.log("Tracking pixel generated:", trackingPixel);
 
     // Get draft from Gmail
+    console.log("Fetching Gmail draft with id:", draftData.draft_id);
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
+    console.log("Draft fetched:", draft.data);
 
     const payload = draft.data.message.payload;
     const headers = payload.headers || [];
     const subject = headers.find((h) => h.name === "Subject")?.value || "";
+    console.log("Extracted subject:", subject);
 
     const htmlBody = extractHtmlOrPlainText(payload);
+    console.log("Extracted body length:", htmlBody.length);
 
     const finalHtmlBody = htmlBody + trackingPixel;
+    console.log("Final HTML body length:", finalHtmlBody.length);
 
     const raw = await makeReplyBody({
       to: body.professorEmail,
@@ -501,40 +556,50 @@ export async function sendFollowUpEmail({
       from: userEmail,
       subject: subject,
       html: finalHtmlBody,
-      inReplyToMessageId: body.threadId,
+      inReplyToMessageId: body.messageId,
     });
+    console.log("Raw email generated");
 
-    // Update draft
+    console.log("Updating Gmail draft...");
     await gmail.users.drafts.update({
       userId: "me",
       id: draftData.draft_id,
-      requestBody: { message: { raw } },
+      requestBody: { message: { raw, threadId: body.threadId } },
     });
+    console.log("Draft updated successfully");
 
     // Send the draft
+    console.log("Sending Gmail draft...");
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: {
-        id: draftData.draft_id,
+        id: draftData.draft_id, // existing draft ID
       },
     });
 
+    console.log("Draft sent:", sendResponse.data);
+
     // Update Emails table
+    console.log("Updating Emails table for draft:", sendResponse.data.id);
     const { error: emailInsertionError } = await supabase
       .from("Emails")
       .update({
         sent: true,
         type: "followup",
         thread_id: sendResponse.data.threadId,
+        message_id: sendResponse.data.id,
         professor_name: body.professorName,
         professor_email: body.professorEmail,
       })
-      .eq("draft_id", sendResponse.data.id);
+      .eq("draft_id", draftData.draft_id);
 
     if (emailInsertionError) {
+      console.error("Emails Insertion Error:", emailInsertionError);
       throw new Error("Emails Insertion Error");
     }
 
+    //sending replies is not working
+    console.log("Inserting into Messages table...");
     const { error: messageInsertionError } = await supabase
       .from("Messages")
       .insert({
@@ -546,11 +611,14 @@ export async function sendFollowUpEmail({
       });
 
     if (messageInsertionError) {
+      console.error("Message Insertion Error:", messageInsertionError);
       throw new Error("Message Insertion Error");
     }
 
+    console.log("Follow-up email successfully sent!");
     return { message: "Successfully Sent!" };
   } catch (err) {
+    console.error("sendFollowUpEmail error:", err);
     return { message: "Failed to send follow-up email" };
   }
 }
@@ -637,7 +705,7 @@ export async function sendFollowUpWithAttachments({
       name: userName,
       subject,
       html: finalHtmlBody,
-      inReplyToMessageId: body.threadId,
+      inReplyToMessageId: body.messageId,
       emailAttachments: emailAttachments,
     });
 

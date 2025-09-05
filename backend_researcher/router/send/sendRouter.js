@@ -52,6 +52,7 @@ router.post(
           accessToken: req.token,
           body: {
             threadId: professor.thread_id,
+            messageId: professor.message_id,
             professorId: professor.professor_id,
             professorEmail: professor.professor_email,
             professorName: professor.professor_name,
@@ -84,6 +85,7 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
           professorId: professor.professor_id,
           professorEmail: professor.professor_email,
           professorName: professor.professor_name,
+          messageId: professor.message_id,
           threadId: professor.thread_id,
         },
       },
@@ -150,10 +152,15 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
   }
 });
 
+//fix the name and the email for sending first initial email and fix follow up
+//  so it is added to a thread and replied to a message, get attachments to work
+//  and then fix inbox and ui for uploading files to drive and pulling resume
+
 router.post("/mass-send", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-
+  console.log(userEmail)
+  console.log(userName)
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",

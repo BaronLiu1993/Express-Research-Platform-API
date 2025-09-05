@@ -11,7 +11,7 @@ router.get("/workspace/completed-data", verifyToken, async (req, res) => {
       await req.supabaseClient
         .from("Emails")
         .select(
-          "thread_id, professor_id, professor_name, professor_email"
+          "thread_id, message_id, professor_id, professor_name, professor_email"
         )
         .eq("user_id", userId)
         .eq("type", "first")

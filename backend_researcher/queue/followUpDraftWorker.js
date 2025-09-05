@@ -6,7 +6,7 @@ import { generateFollowUpDraftSnippetEmail } from "./queueService.js";
 export const followUpWorker = new Worker(
   "follow-up-draft-email",
   async (job) => {
-    const { userId, professorId, body, accessToken, threadId } = job.data;
+    const { userId, professorId, body, accessToken, threadId, messageId } = job.data;
     try {
       await generateFollowUpDraftSnippetEmail({
         userId,

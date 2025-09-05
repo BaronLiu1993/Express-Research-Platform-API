@@ -24,7 +24,7 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
   }
 });
 
-router.get("/kanban/get-saved/:userId", verifyToken, async (req, res) => {
+router.get("/kanban/get-saved", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   try {
     const { data: savedData, error: savedFetchError } = await req.supabaseClient
@@ -77,7 +77,6 @@ router.post(
           comments: comments,
         })
         .single();
-      console.log(savedInsertionError);
       if (savedInsertionError) {
         return res
           .status(400)
