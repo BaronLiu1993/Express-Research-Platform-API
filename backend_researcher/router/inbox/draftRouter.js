@@ -12,12 +12,6 @@ import { verifyToken } from "../../services/authServices.js";
 
 const router = express.Router();
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI
-);
-
 router.post(
   "/create-follow-up-draft/:userId/:professorId/:threadId",
   verifyToken,
@@ -159,7 +153,7 @@ router.post(
 );
 
 router.get(
-  "/resume-follow-up-draft/:userId/:professorId",
+  "/resume-follow-up-draft/:professorId",
   verifyToken,
   async (req, res) => {
     const { professorId } = req.params;

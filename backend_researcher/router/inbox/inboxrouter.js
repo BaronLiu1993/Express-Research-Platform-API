@@ -6,6 +6,7 @@ import EmailReplyParser from "email-reply-parser";
 import { simpleParser } from "mailparser";
 
 //Google Service Service Layer
+import { configureOAuth } from "../../services/googleServices.js";
 import { decodeBody } from "../../services/googleServices.js";
 import { verifyToken } from "../../services/authServices.js";
 
@@ -13,21 +14,16 @@ dotenv.config();
 
 const router = express.Router();
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI
-);
-
 router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
   const { threadId, messageId } = req.params;
   try {
-    const { data: messageData, error: messageDataError } = await req.supabaseClient
-      .from("Messages")
-      .select("opened_email, opened_email_at")
-      .eq("thread_id", threadId)
-      .eq("message_id", messageId)
-      .single();
+    const { data: messageData, error: messageDataError } =
+      await req.supabaseClient
+        .from("Messages")
+        .select("opened_email, opened_email_at")
+        .eq("thread_id", threadId)
+        .eq("message_id", messageId)
+        .single();
 
     if (messageDataError) {
       return res.status(400).json({ opened: false, opened_at: "Not Opened" });
@@ -42,51 +38,48 @@ router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
   }
 });
 
-router.get("/get-full-email-chain/:userId/:threadId", verifyToken, async (req, res) => {
+router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
   const { threadId } = req.params;
-  const userId = req.user.sub
-  const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-    .from("User_Profiles")
-    .select("gmail_auth_token, gmail_refresh_token")
-    .eq("user_id", userId)
-    .single();
-
-  if (tokenFetchError || !tokenData) {
-    return res.status(401).json({ error: "Token fetch error" });
-  }
-
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
-  });
+  const userId = req.user.sub;
+  console.log("[Route] /get-full-email-chain called with threadId:", threadId);
 
   try {
-    await oauth2Client.getAccessToken();
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
+    console.log("[Step] Gmail OAuth configured successfully.");
 
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
+    console.log("[Step] Fetching thread data...");
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
       format: "full",
     });
+    console.log("[Step] Thread data fetched:", threadData?.data?.messages?.length, "messages found.");
 
     const messages = threadData?.data?.messages || [];
 
+    console.log("[Step] Parsing individual messages...");
     const messageArray = await Promise.all(
-      messages.map(async (message) => {
+      messages.map(async (message, index) => {
+        console.log(`[Message ${index}] Fetching message ID: ${message.id}`);
         const msgData = await gmail.users.messages.get({
           userId: "me",
           id: message.id,
-          format: "raw", 
+          format: "raw",
         });
 
         const raw = msgData?.data?.raw || "";
+        console.log(`[Message ${index}] Raw message length:`, raw.length);
+
         const buffer = Buffer.from(raw, "base64");
         const parsed = await simpleParser(buffer);
+        console.log(`[Message ${index}] Parsed subject:`, parsed.subject);
 
         const replyParsed = new EmailReplyParser().read(parsed.text || "");
         const visibleBody = replyParsed.getVisibleText();
+        console.log(`[Message ${index}] Visible body length:`, visibleBody.length);
 
         return {
           labels: message.labelIds || [],
@@ -99,75 +92,72 @@ router.get("/get-full-email-chain/:userId/:threadId", verifyToken, async (req, r
       })
     );
 
+    console.log("[Step] All messages parsed successfully. Returning response.");
     return res.status(200).json({ messageArray });
   } catch (err) {
-    console.error("Thread processing error:", err);
+    console.error("[Error] Thread processing error:", err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
 
-
-router.get("/get-email-chain/:userId", async (req, res) => {
-  const userId = req.user.sub
-  const { data: completedData, error: completedFetchError } = await req.supabaseClient
-    .from("Completed")
-    .select("professor_id")
-    .eq("user_id", userId);
-
-  if (completedFetchError || !completedData?.length) {
-    return res
-      .status(401)
-      .json({ error: "Error fetching completed professors" });
-  }
-
-  const completedProfessorIds = completedData.map((row) => row.professor_id);
-
-  const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-    .from("User_Profiles")
-    .select(
-      "gmail_auth_token, gmail_refresh_token, student_email, student_lastname, student_firstname"
-    )
-    .eq("user_id", userId)
-    .single();
-
-  if (tokenFetchError || !tokenData) {
-    return res.status(401).json({ error: "Token fetch error" });
-  }
-
-  const { data: threadData, error: threadFetchError } = await req.supabaseClient
-    .from("Emails")
-    .select("thread_id, professor_id")
-    .eq("user_id", userId)
-    .eq("type", "first")
-    .in("professor_id", completedProfessorIds);
-
-  if (threadFetchError || !threadData?.length) {
-    return res.status(401).json({ error: "Thread fetch error" });
-  }
-
-  const { data: professorData, error: professorFetchError } = await req.supabaseClient
-    .from("Taishan")
-    .select("id, name, email")
-    .in("id", completedProfessorIds);
-
-  if (professorFetchError || !professorData?.length) {
-    return res.status(401).json({ error: "Professor data fetch error" });
-  }
-
-  const professorMap = {};
-  for (const prof of professorData) {
-    professorMap[prof.id] = prof;
-  }
-
-  oauth2Client.setCredentials({
-    access_token: tokenData.gmail_auth_token,
-    refresh_token: tokenData.gmail_refresh_token,
-  });
-
+router.get("/get-email-chain", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
   try {
-    await oauth2Client.getAccessToken();
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const { data: completedData, error: completedFetchError } =
+      await req.supabaseClient
+        .from("Completed")
+        .select("professor_id")
+        .eq("user_id", userId);
+
+    if (completedFetchError || !completedData?.length) {
+      return res
+        .status(401)
+        .json({ error: "Error fetching completed professors" });
+    }
+
+    const completedProfessorIds = completedData.map((row) => row.professor_id);
+
+    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
+      .from("User_Profiles")
+      .select("student_email, student_name")
+      .eq("user_id", userId)
+      .single();
+
+    if (tokenFetchError || !tokenData) {
+      return res.status(401).json({ message: "Token fetch error" });
+    }
+
+    const { data: threadData, error: threadFetchError } =
+      await req.supabaseClient
+        .from("Emails")
+        .select("thread_id, professor_id")
+        .eq("user_id", userId)
+        .eq("type", "first")
+        .in("professor_id", completedProfessorIds);
+
+    if (threadFetchError || !threadData?.length) {
+      return res.status(401).json({ message: "Thread fetch error" });
+    }
+
+    const { data: professorData, error: professorFetchError } =
+      await req.supabaseClient
+        .from("Taishan")
+        .select("id, name, email")
+        .in("id", completedProfessorIds);
+
+    if (professorFetchError || !professorData?.length) {
+      return res.status(401).json({ message: "Professor data fetch error" });
+    }
+
+    const professorMap = {};
+    for (const prof of professorData) {
+      professorMap[prof.id] = prof;
+    }
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
 
     const threadArray = [];
 
@@ -189,7 +179,7 @@ router.get("/get-email-chain/:userId", async (req, res) => {
         decodeBody(thread.data.messages[0]?.payload?.body?.data || "") || "";
 
       const threadObject = {
-        userName: `${tokenData.student_firstname} ${tokenData.student_lastname}`,
+        userName: tokenData.student_name,
         userEmail: tokenData.student_email,
         professorEmail: professor.email,
         professorId: professor.id,

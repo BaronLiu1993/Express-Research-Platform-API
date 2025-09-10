@@ -62,6 +62,7 @@ export async function verifyToken(req, res, next) {
     return res.status(401).json({ message: "Missing token" });
   }
 
+
   try {
     const payload = jwt.verify(token, SUPABASE_JWT_SECRET, {
       algorithms: [SUPABASE_JWT_ALGORITHM],
@@ -74,7 +75,7 @@ export async function verifyToken(req, res, next) {
         },
       },
     });
-    console.log("success");
+
     req.user = payload;
     req.token = token;
     req.supabaseClient = supabaseClient;
