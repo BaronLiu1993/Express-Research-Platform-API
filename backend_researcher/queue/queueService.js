@@ -19,8 +19,6 @@ export async function generateDraftFromSnippetEmail({
   accessToken,
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail, toName } = body;
-  console.log(fromEmail);
-  console.log(fromName); //get the fromname to work and the fromemail it is not passing through for some reason
   const trackingId = uuidv4();
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -33,7 +31,7 @@ export async function generateDraftFromSnippetEmail({
 
   try {
     const gmail = await configureOAuth({ userId, supabase });
-
+    console.log(gmail)
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
       .select("*")
@@ -64,8 +62,6 @@ export async function generateDraftFromSnippetEmail({
       requestBody: { message: { raw } },
     });
 
-    console.log(draft);
-
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
         user_id: userId,
@@ -79,12 +75,6 @@ export async function generateDraftFromSnippetEmail({
         professor_name: toName,
       },
     ]);
-
-    console.log(insertionError);
-
-    if (insertionError) {
-      throw new Error("Failed to Insert");
-    }
 
     const { data: savedData, error: savedError } = await supabase
       .from("Saved")

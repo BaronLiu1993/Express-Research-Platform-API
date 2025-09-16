@@ -295,7 +295,7 @@ router.post("/register", verifyToken, async (req, res) => {
   try {
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
-
+    console.log(embeddings)
     //Insert into User_Profiles
     const { error: profileError } = await supabase
       .from("User_Profiles")
@@ -308,11 +308,12 @@ router.post("/register", verifyToken, async (req, res) => {
         finished_registration: true,
       })
       .eq("user_id", userId)
+      .select()      
       .single();
 
     if (profileError) {
       console.log(profileError);
-      return res.status(400).json({ message: "Failed To Insert," });
+      return res.status(400).json({ message: "Failed To Update" });
     }
     console.log("done");
     return res.status(200).json({ message: "Sucessfully Completed Profile" });
