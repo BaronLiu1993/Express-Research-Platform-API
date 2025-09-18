@@ -46,7 +46,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
     });
 
     const accessTokenResponse = await oauth2Client.getAccessToken();
-
     const newAccessToken = accessTokenResponse.token;
 
     if (!newAccessToken) {

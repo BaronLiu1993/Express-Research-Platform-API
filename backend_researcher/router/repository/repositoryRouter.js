@@ -1,4 +1,3 @@
-import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 
 //External Library Imports

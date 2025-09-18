@@ -4,15 +4,10 @@ import dotenv from "dotenv";
 import { uploadInstance } from "./storageMiddleware.js";
 import { Readable } from "node:stream";
 import { decryptToken, verifyToken } from "../../services/authServices.js";
+import { configureOAuth } from "../../services/googleServices.js";
 
 const router = express.Router();
 dotenv.config();
-
-const oauth2Client = new google.auth.OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI
-);
 
 router.get("/get-file-links", verifyToken, async (req, res) => {
   const { userId } = req.params;
@@ -34,30 +29,27 @@ router.get("/get-file-links", verifyToken, async (req, res) => {
 
 //Uploading Transcripts
 
-router.post("/upload-transcript-links", verifyToken, uploadInstance.single("file"), async (req, res) => {
-    const { userId } = req.params;
+router.post(
+  "/upload-transcript-links",
+  verifyToken,
+  uploadInstance.single("file"),
+  async (req, res) => {
+    const userId = req.user.sub;
+    console.log(userId);
     const file = req.file;
     const bufferStream = new Readable();
     bufferStream.push(req.file.buffer);
     bufferStream.push(null);
-
+    console.log("fired");
     try {
-      const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-        .from("User_Profiles")
-        .select("gmail_auth_token, gmail_refresh_token")
-        .eq("user_id", userId)
-        .single();
-
-      if (!tokenData || tokenFetchError) {
-        return res.status(401).json({ updated: false });
-      }
-
-      oauth2Client.setCredentials({
-        access_token: tokenData.gmail_auth_token,
-        refresh_token: tokenData.gmail_refresh_token,
+      const oAuthClient = await configureOAuth({
+        userId,
+        supabase: req.supabaseClient,
+        fetchDrive: true,
       });
 
-      const drive = google.drive({ version: "v3", auth: oauth2Client });
+      const drive = oAuthClient.drive;
+
       const response = await drive.files.create({
         requestBody: {
           name: file.originalname,
@@ -68,49 +60,46 @@ router.post("/upload-transcript-links", verifyToken, uploadInstance.single("file
           body: bufferStream,
         },
       });
+      console.log(response);
 
       const { error: insertionError } = await req.supabaseClient
         .from("User_Profiles")
         .update({ transcript: response.data.id })
         .eq("user_id", userId);
+
+      console.log(insertionError);
       if (insertionError) {
         return res.status(400).json({ message: "Failed To Insert" });
       }
+
       return res.status(200).json({ message: "Successfully Inserted" });
     } catch (err) {
-      console.log(err)
+      console.log(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
 );
 
 //Uploading Resumes
-router.post("/upload-resume-links", verifyToken, uploadInstance.single("file"),
+router.post(
+  "/upload-resume-links",
+  verifyToken,
+  uploadInstance.single("file"),
   async (req, res) => {
     const userId = req.user.sub;
     const file = req.file;
     const bufferStream = new Readable();
     bufferStream.push(req.file.buffer);
     bufferStream.push(null);
-    console.log(userId);
-
     try {
-      const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-        .from("User_Profiles")
-        .select("gmail_auth_token, gmail_refresh_token")
-        .eq("user_id", userId)
-        .single();
-
-      if (!tokenData || tokenFetchError) {
-        return res.status(401).json({ updated: false });
-      }
-
-      oauth2Client.setCredentials({
-        access_token: tokenData.gmail_auth_token,
-        refresh_token: tokenData.gmail_refresh_token,
+      
+      const oAuthClient = await configureOAuth({
+        userId,
+        supabase: req.supabaseClient,
+        fetchDrive: true,
       });
-
-      const drive = google.drive({ version: "v3", auth: oauth2Client });
+      
+      const drive = oAuthClient.drive
       const response = await drive.files.create({
         requestBody: {
           name: file.originalname,
@@ -132,7 +121,6 @@ router.post("/upload-resume-links", verifyToken, uploadInstance.single("file"),
       }
       return res.status(200).json({ message: "Successfully Inserted" });
     } catch (err) {
-      console.log(err)
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
@@ -140,51 +128,30 @@ router.post("/upload-resume-links", verifyToken, uploadInstance.single("file"),
 
 router.get("/get-resume", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-
   try {
-    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (!tokenData || tokenFetchError || !tokenData.gmail_auth_token) {
-      return res.status(401).json({
-        success: false,
-        reauthRequired: true,
-      });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: decryptToken(tokenData.gmail_auth_token),
-      refresh_token: decryptToken(tokenData.gmail_refresh_token),
-    });
-
-    try {
-      await oauth2Client.getAccessToken(); 
-    } catch {
-      return res.status(401).json({
-        success: false,
-        reauthRequired: true,
-      });
-    }
-
-    const { data: resumeData, error: resumeDataFetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("resume")
-      .eq("user_id", userId)
-      .single();
+    const { data: resumeData, error: resumeDataFetchError } =
+      await req.supabaseClient
+        .from("User_Profiles")
+        .select("resume")
+        .eq("user_id", userId)
+        .single();
 
     if (resumeDataFetchError || !resumeData?.resume) {
       return res.status(200).json({
         success: false,
-        reauthRequired: false,
+        message: "Transcript Fetch Error",
       });
     }
 
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
-    const fileId = resumeData.resume;
+    const oAuthClient = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+      fetchDrive: true,
+    });
 
+    const drive = oAuthClient.drive;
+
+    const fileId = resumeData.resume;
     const response = await drive.files.get({
       fileId,
       fields: "id, name, webViewLink, webContentLink",
@@ -192,29 +159,15 @@ router.get("/get-resume", verifyToken, async (req, res) => {
 
     return res.status(200).json({ success: true, data: response.data });
   } catch (err) {
-    console.log(err)
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 });
 
-
 router.get("/get-transcript", verifyToken, async (req, res) => {
-  const userId = req.user.sub
+  const userId = req.user.sub;
   try {
-    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (!tokenData || tokenFetchError) {
-      return res.status(401).json({ updated: false });
-    }
-    oauth2Client.setCredentials({
-      access_token: decryptToken(tokenData.gmail_auth_token),
-      refresh_token: decryptToken(tokenData.gmail_refresh_token),
-    });
-
     const { data: transcriptData, error: transcriptDataFetchError } =
       await req.supabaseClient
         .from("User_Profiles")
@@ -222,26 +175,26 @@ router.get("/get-transcript", verifyToken, async (req, res) => {
         .eq("user_id", userId)
         .single();
 
-        if (transcriptDataFetchError|| !transcriptData.transcript) {
-          return res.status(200).json({
-            success: false,
-            reauthRequired: false,
-          });
-        }
     if (transcriptDataFetchError) {
       return res
         .status(200)
-        .json({ success: false, data: "Transcript Fetch Error" });
+        .json({ success: false, message: "Transcript Fetch Error" });
     }
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
+    const oAuthClient = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+      fetchDrive: true,
+    });
+    const drive = oAuthClient.drive;
     const fileId = transcriptData.transcript;
+
     const response = await drive.files.get({
       fileId,
       fields: "id, name, webViewLink, webContentLink",
     });
+
     return res.status(200).json({ success: true, data: response.data });
   } catch (err) {
-    console.log(err)
     return res
       .status(500)
       .json({ success: false, message: "Internal Server Error" });

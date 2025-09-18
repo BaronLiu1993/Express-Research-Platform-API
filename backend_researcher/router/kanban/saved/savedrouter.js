@@ -24,6 +24,7 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
   }
 });
 
+//Implement Pagination here, fix the send email with attachment function and clean up other logic
 router.get("/kanban/get-saved", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   try {
@@ -31,7 +32,7 @@ router.get("/kanban/get-saved", verifyToken, async (req, res) => {
       .from("Saved")
       .select("*")
       .eq("user_id", userId)
-      .limit(10);
+      .limit(20);
     if (savedFetchError) {
       return res.status(400).json({ message: "Unable to Fetch Data" });
     }
@@ -42,7 +43,7 @@ router.get("/kanban/get-saved", verifyToken, async (req, res) => {
 });
 
 router.post(
-  "/kanban/add-saved/:userId/:professorId",
+  "/kanban/add-saved/:professorId",
   verifyToken,
   async (req, res) => {
     const { professorId } = req.params;
@@ -91,7 +92,7 @@ router.post(
 );
 
 router.delete(
-  "/kanban/remove-saved/:userId/:professorId",
+  "/kanban/remove-saved/:professorId",
   verifyToken,
   async (req, res) => {
     const { professorId } = req.params;

@@ -2,7 +2,6 @@ import { supabase } from "../../supabase/supabase.js";
 import express from "express";
 import { google } from "googleapis";
 import {
-  decryptToken,
   encryptToken,
   generateEmbeddings,
   verifyToken,
