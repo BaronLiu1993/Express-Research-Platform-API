@@ -30,7 +30,6 @@ router.get("/taishan/filter", verifyToken, async (req, res) => {
         { count: "exact" }
       );
 
-    // Apply filters only if present
     if (school) {
       const values = Array.isArray(school) ? school : [school];
       query = query.in("school", values.map((v) => v.trim()).filter(Boolean));
@@ -43,29 +42,29 @@ router.get("/taishan/filter", verifyToken, async (req, res) => {
 
     if (department) {
       const values = Array.isArray(department) ? department : [department];
-      query = query.in("department", values.map((v) => v.trim()).filter(Boolean));
+      query = query.in(
+        "department",
+        values.map((v) => v.trim()).filter(Boolean)
+      );
     }
 
     // Pagination
     query = query.range(from, to);
 
-    const { data: tableData, error } = await query;
+    const { data: tableData, error: tableDataError } = await query;
 
-    if (error) {
-      console.error(error);
+    if (tableDataError) {
       return res.status(400).json({ message: "Failed To Fetch Filtered Data" });
     }
 
     return res.status(200).json({ tableData });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-
 router.get("/taishan", verifyToken, async (req, res) => {
-  console.log("fired")
+  console.log("fired");
   const { page, search } = req.query;
   const pageNumber = parseInt(page) || 1;
   const limit = 20;

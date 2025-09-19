@@ -12,7 +12,6 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
         .select("professor_id")
         .eq("user_id", userId);
 
-
     if (professorIdFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }
@@ -26,70 +25,77 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
 
 //Implement Pagination here, fix the send email with attachment function and clean up other logic
 router.get("/kanban/get-saved", verifyToken, async (req, res) => {
+  const { page = 1 } = req.body;
   const userId = req.user.sub;
+  const pageNumber = parseInt(page);
+  const limit = 10;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
+
   try {
-    const { data: savedData, error: savedFetchError } = await req.supabaseClient
+    let query = req.supabaseClient
       .from("Saved")
       .select("*")
-      .eq("user_id", userId)
-      .limit(20);
+      .eq("user_id", userId);
+
+    query = query.range(from, to);
+
+    const { data: savedData, error: savedFetchError } = await query;
+
     if (savedFetchError) {
       return res.status(400).json({ message: "Unable to Fetch Data" });
     }
+
     return res.status(200).json({ data: savedData });
   } catch {
     return res.status(500).json({ message: "Internal Service Error" });
   }
 });
 
-router.post(
-  "/kanban/add-saved/:professorId",
-  verifyToken,
-  async (req, res) => {
-    const { professorId } = req.params;
-    const userId = req.user.sub;
-    const {
-      name,
-      email,
-      url,
-      lab_url,
-      research_interests,
-      labs,
-      department,
-      faculty,
-      school,
-      comments,
-    } = req.body;
-    try {
-      const { error: savedInsertionError } = await req.supabaseClient
-        .from("Saved")
-        .insert({
-          user_id: userId,
-          professor_id: professorId,
-          name: name,
-          email: email,
-          url: url,
-          lab_url: lab_url,
-          labs: labs,
-          department: department,
-          faculty: faculty,
-          school: school,
-          research_interests: research_interests,
-          comments: comments,
-        })
-        .single();
-      if (savedInsertionError) {
-        return res
-          .status(400)
-          .json({ message: "Could not fetch application data." });
-      }
-
-      return res.status(200).json({ message: "Professor saved successfully." });
-    } catch (err) {
-      return res.status(500).json({ message: "An unexpected error occurred." });
+router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
+  const { professorId } = req.params;
+  const userId = req.user.sub;
+  const {
+    name,
+    email,
+    url,
+    lab_url,
+    research_interests,
+    labs,
+    department,
+    faculty,
+    school,
+    comments,
+  } = req.body;
+  try {
+    const { error: savedInsertionError } = await req.supabaseClient
+      .from("Saved")
+      .insert({
+        user_id: userId,
+        professor_id: professorId,
+        name: name,
+        email: email,
+        url: url,
+        lab_url: lab_url,
+        labs: labs,
+        department: department,
+        faculty: faculty,
+        school: school,
+        research_interests: research_interests,
+        comments: comments,
+      })
+      .single();
+    if (savedInsertionError) {
+      return res
+        .status(400)
+        .json({ message: "Could not fetch application data." });
     }
+
+    return res.status(200).json({ message: "Professor saved successfully." });
+  } catch (err) {
+    return res.status(500).json({ message: "An unexpected error occurred." });
   }
-);
+});
 
 router.delete(
   "/kanban/remove-saved/:professorId",

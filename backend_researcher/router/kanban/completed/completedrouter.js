@@ -29,19 +29,27 @@ router.get("/workspace/completed-data", verifyToken, async (req, res) => {
 });
 
 router.get("/kanban/get-completed", verifyToken, async (req, res) => {
+  const { page } = req.body;
   const userId = req.user.sub;
+  const pageNumber = parseInt(page);
+  const limit = 10;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
+
   try {
-    const { data: completedData, error: completedFetchError } =
-      await req.supabaseClient
-        .from("Completed")
-        .select("*")
-        .eq("user_id", userId)
-        .limit(10);
+    let query = req.supabaseClient
+      .from("Completed")
+      .select("*")
+      .eq("user_id", userId);
+
+    query = query.range(from, to);
+
+    const { data: completedData, error: completedFetchError } = await query;
 
     if (completedFetchError) {
       return res.status(400).json({ message: "Unable to Fetch Data" });
     }
-    
+
     return res.status(200).json({ data: completedData });
   } catch {
     return res.status(500).json({ message: "Internal Service Error" });
@@ -129,11 +137,9 @@ router.post(
         return res.status(400).json({ message: "Failed to delete" });
       }
 
-      return res
-        .status(200)
-        .json({
-          message: "Professor successfully added to 'Completed' column.",
-        });
+      return res.status(200).json({
+        message: "Professor successfully added to 'Completed' column.",
+      });
     } catch {
       return res.status(500).json({ message: "Internal Server Error" });
     }

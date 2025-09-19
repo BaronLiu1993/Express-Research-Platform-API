@@ -3,40 +3,43 @@ import { verifyToken } from "../../../services/authServices.js";
 
 const router = express.Router();
 
-router.get(
-  "/repository/get-all-appliedId",
-  verifyToken,
-  async (req, res) => {
-    console.log("fired")
-    const userId = req.user.sub;
-    try {
-      const { data: professorIdData, error: professorIdFetchError } =
-        await req.supabaseClient
-          .from("InProgress")
-          .select("professor_id")
-          .eq("user_id", userId);
+router.get("/repository/get-all-appliedId", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
+  try {
+    const { data: professorIdData, error: professorIdFetchError } =
+      await req.supabaseClient
+        .from("InProgress")
+        .select("professor_id")
+        .eq("user_id", userId);
 
-      if (professorIdFetchError) {
-        return res.status(400).json({ message: "Failed to Fetch" });
-      }
-      console.log(professorIdData)
-      const professorIds = professorIdData.map((item) => item.professor_id);
-      return res.status(200).json({ data: professorIds });
-    } catch {
-      return res.status(500).json({ message: "Internal Server Error" });
+    if (professorIdFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch" });
     }
+    console.log(professorIdData);
+    const professorIds = professorIdData.map((item) => item.professor_id);
+    return res.status(200).json({ data: professorIds });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-);
+});
 
 //Get Kanban
 router.get("/kanban/get-in-progress", verifyToken, async (req, res) => {
+  const { page = 1 } = req.body;
   const userId = req.user.sub;
+  const pageNumber = parseInt(page);
+  const limit = 10;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
   try {
-    const { data: savedData, error: savedFetchError } = await req.supabaseClient
+    let query = req.supabaseClient
       .from("InProgress")
       .select("*")
-      .eq("user_id", userId)
-      .limit(10);
+      .eq("user_id", userId);
+
+    query = query.range(from, to);
+
+    const { data: savedData, error: savedFetchError } = await query;
 
     if (savedFetchError) {
       return res.status(400).json({ message: "Unable to Fetch Data" });
@@ -49,14 +52,23 @@ router.get("/kanban/get-in-progress", verifyToken, async (req, res) => {
 });
 
 router.get("/fetch/draft", verifyToken, async (req, res) => {
+  const { page = 1 } = req.body;
   const userId = req.user.sub;
-  console.log(userId)
+  const pageNumber = parseInt(page);
+  const limit = 10;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
+
   try {
-    const { data: draftData, error: fetchError } = await req.supabaseClient
+    let query = req.supabaseClient
       .from("Emails")
       .select("draft_id, professor_id")
       .eq("user_id", userId)
       .eq("type", "draft");
+
+    query = query.range(from, to);
+
+    const { data: draftData, error: fetchError } = await query;
 
     let totalDraftData = [];
     await Promise.all(
@@ -92,7 +104,7 @@ router.get("/fetch/draft", verifyToken, async (req, res) => {
 
 //Add To In Progress
 router.post(
-  "/kanban/add-in-progress/:userId/:professorId",
+  "/kanban/add-in-progress/:professorId",
   verifyToken,
   async (req, res) => {
     const userId = req.user.sub;
@@ -176,7 +188,7 @@ router.post(
 );
 
 router.delete(
-  "/kanban/delete-in-progress/:userId/:professorId",
+  "/kanban/delete-in-progress/:professorId",
   verifyToken,
   async (req, res) => {
     const { professorId } = req.params;
@@ -187,7 +199,7 @@ router.delete(
         .from("InProgress")
         .delete()
         .eq("user_id", userId)
-        .eq("professor_id", Number(professorId));
+        .eq("professor_id", parseInt(professorId));
 
       if (deletionError) {
         return res.status(400).json({ message: "Failed to delete" });
