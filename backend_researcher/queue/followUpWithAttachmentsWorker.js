@@ -15,8 +15,8 @@ export const followUpWorkerWithAttachments = new Worker(
         body,
         accessToken,
       });
-    } catch {
-      throw new Error("Internal Server Error");
+    } catch (err) {
+      throw err;
     }
   },
   {
@@ -25,31 +25,18 @@ export const followUpWorkerWithAttachments = new Worker(
   }
 );
 
-followUpWorkerWithAttachments.on("completed", (job) => {
-  console.log(
-    `[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`
-  );
+followUpWorkerWithAttachments.on("completed", (job, result) => {
+  console.log(`Job ${job.id} completed`);
 });
 
 followUpWorkerWithAttachments.on("failed", (job, err) => {
-  console.error(
-    `🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`,
-    err.message
-  );
+  console.error(`Job ${job.id} failed for professor`, err.message);
 });
 
-followUpWorkerWithAttachments.on("active", (job) => {
-  console.log(`[Worker] Job is active`);
-});
-
-followUpWorkerWithAttachments.on("progress", (job, progress) => {
-  console.log(`[Worker] Job progress`, progress);
-});
-
-followUpWorkerWithAttachments.on("stalled", (jobId) => {
-  console.warn(`[Worker] Job stalled: jobId=${jobId}`);
+followUpWorkerWithAttachments.on("stalled", (job, err) => {
+  console.warn(`Job ${job.id} stalled`);
 });
 
 followUpWorkerWithAttachments.on("error", (err) => {
-  console.error("[Worker] Worker-level error:", err);
+  console.error("Worker error:", err);
 });

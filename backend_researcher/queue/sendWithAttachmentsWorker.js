@@ -6,18 +6,17 @@ export const sendWithAttachmentsWorker = new Worker(
   "send-email-with-attachments",
   async (job) => {
     const { userId, userEmail, userName, body, accessToken } = job.data;
-    console.log(job.data)
     try {
       const result = await sendSnippetEmailWithAttachments({
         userId,
         userEmail,
         userName,
         body,
-        accessToken
+        accessToken,
       });
       return result;
-    } catch (error) {
-      throw error;
+    } catch (err) {
+      throw err;
     }
   },
   {
@@ -31,15 +30,15 @@ export const sendWithAttachmentsWorker = new Worker(
 );
 
 sendWithAttachmentsWorker.on("completed", (job, result) => {
-  console.log(`✅ Job ${job.id} sent professor`);
+  console.log(`Job ${job.id} sent professor`);
 });
 
 sendWithAttachmentsWorker.on("failed", (job, err) => {
-  console.error(`❌ Job ${job.id} sent failed for professor`, err.message);
+  console.error(`Job ${job.id} sent failed for professor`, err.message);
 });
 
-sendWithAttachmentsWorker.on("stalled", (jobId) => {
-  console.warn(`⚠️ Job ${jobId} sent stalled`);
+sendWithAttachmentsWorker.on("stalled", (job) => {
+  console.warn(`Job ${job.id} sent stalled`);
 });
 
 sendWithAttachmentsWorker.on("error", (err) => {

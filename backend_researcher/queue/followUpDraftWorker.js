@@ -6,7 +6,7 @@ import { generateFollowUpDraftSnippetEmail } from "./queueService.js";
 export const followUpWorker = new Worker(
   "follow-up-draft-email",
   async (job) => {
-    const { userId, professorId, body, accessToken, threadId, messageId } = job.data;
+    const { userId, professorId, body, accessToken } = job.data;
     try {
       await generateFollowUpDraftSnippetEmail({
         userId,
@@ -24,31 +24,21 @@ export const followUpWorker = new Worker(
   }
 );
 
-followUpWorker.on("completed", (job) => {
-  console.log(
-    `[Worker] Job completed for userId=${job.data.userId}, draftId=${job.data.draftId}`
-  );
+followUpWorker.on("completed", (job, result) => {
+  console.log(`Job ${job.id} completed for professor ${job.data.professorId}`);
 });
 
 followUpWorker.on("failed", (job, err) => {
   console.error(
-    `🔥 [Worker] Job failed for userId=${job.data.userId}, draftId=${job.data.draftId}`,
+    `Job ${job.id} failed for professor ${job.data.professorId}:`,
     err.message
   );
 });
 
-followUpWorker.on("active", (job) => {
-  console.log(`[Worker] Job is active`);
-});
-
-followUpWorker.on("progress", (job, progress) => {
-  console.log(`[Worker] Job progress`, progress);
-});
-
-followUpWorker.on("stalled", (jobId) => {
-  console.warn(`[Worker] Job stalled: jobId=${jobId}`);
+followUpWorker.on("stalled", (job, err) => {
+  console.warn(`Job ${job.id} stalled`);
 });
 
 followUpWorker.on("error", (err) => {
-  console.error("[Worker] Worker-level error:", err);
+  console.error("Worker error:", err);
 });
