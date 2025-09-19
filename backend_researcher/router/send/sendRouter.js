@@ -41,7 +41,7 @@ router.post(
   async (req, res) => {
     const { userEmail, userName, professorData } = req.body;
     const userId = req.user.sub;
-
+    console.log("fired")
     try {
       const jobs = professorData.map((professor) => ({
         name: "follow-up-email-with-attachments",
@@ -127,6 +127,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
 
 router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
+  console.log(professorData)
   const userId = req.user.sub;
 
   try {
@@ -139,8 +140,8 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
         accessToken: req.token,
         body: {
           professorId: professor.id,
-          professorEmail: professor.professor_email,
-          professorName: professor.professor_name,
+          professorEmail: professor.email,
+          professorName: professor.name,
         },
       },
     }));

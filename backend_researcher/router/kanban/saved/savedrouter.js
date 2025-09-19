@@ -48,6 +48,8 @@ router.post(
   async (req, res) => {
     const { professorId } = req.params;
     const userId = req.user.sub;
+    console.log("saved")
+    console.log(userId)
     const {
       name,
       email,
@@ -78,6 +80,7 @@ router.post(
           comments: comments,
         })
         .single();
+      console.log(savedInsertionError)
       if (savedInsertionError) {
         return res
           .status(400)
@@ -86,6 +89,7 @@ router.post(
 
       return res.status(200).json({ message: "Professor saved successfully." });
     } catch (err) {
+      console.log(err)
       return res.status(500).json({ message: "An unexpected error occurred." });
     }
   }
