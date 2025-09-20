@@ -461,8 +461,6 @@ router.delete("/delete-draft/:draftId", verifyToken, async (req, res) => {
 
 export default router;
 
-
-
 /**
  * 
 router.post(
