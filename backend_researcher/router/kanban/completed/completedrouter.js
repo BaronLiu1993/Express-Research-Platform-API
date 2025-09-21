@@ -29,9 +29,8 @@ router.get("/workspace/completed-data", verifyToken, async (req, res) => {
 });
 
 router.get("/kanban/get-completed", verifyToken, async (req, res) => {
-  const { page } = req.body;
   const userId = req.user.sub;
-  const pageNumber = parseInt(page);
+  const pageNumber = 1;
   const limit = 10;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;

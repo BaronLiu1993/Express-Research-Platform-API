@@ -13,65 +13,84 @@ import { verifyToken } from "../../services/authServices.js";
 const router = express.Router();
 
 router.post(
-  "/create-follow-up-draft/:userId/:professorId/:threadId",
+  "/create-follow-up-draft/:professorId/:threadId",
   verifyToken,
   async (req, res) => {
     const { professorId, threadId } = req.params;
     const { to, fromName, fromEmail, subject, message } = req.body;
     const userId = req.user.sub;
 
+    // Log the incoming parameters and body
+    console.log("Received parameters:", { professorId, threadId });
+    console.log("Received body:", {
+      to,
+      fromName,
+      fromEmail,
+      subject,
+      message,
+    });
+    console.log("User ID:", userId);
+
+    // Validate required fields
     if (!to || !fromName || !fromEmail) {
+      console.log("Missing required fields"); // Log if any required field is missing
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const { data: tokenData, error: fetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError || !tokenData) {
-      return res.status(401).json({ message: "Auth tokens not found" });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
+    // Configure OAuth
+    console.log("Configuring OAuth...");
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
     });
 
     try {
-      await oauth2Client.getAccessToken();
-
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
+      // Fetch the thread using Gmail API
+      console.log("Fetching thread...");
       const thread = await gmail.users.threads.get({
         userId: "me",
         id: threadId,
       });
 
+      console.log("Thread data fetched:", thread.data);
+
       const messages = thread.data.messages;
       const lastMessage = messages[messages.length - 1];
+      console.log("Last message in the thread:", lastMessage);
 
+      // Extract Message-ID for the reply
       const messageIdHeader = lastMessage.payload.headers.find(
         (h) => h.name === "Message-ID"
       );
       const inReplyTo = messageIdHeader?.value;
+      console.log("In-Reply-To message ID:", inReplyTo);
 
+      // Generate tracking ID
       const trackingId = uuidv4();
-      const raw = makeReplyBody(
-        to,
-        fromName,
-        fromEmail,
-        subject,
-        message,
-        inReplyTo
-      );
+      console.log("Generated tracking ID:", trackingId);
 
+      // Prepare raw message body
+      console.log("Creating raw message body...");
+      const raw = await makeReplyBody({
+        to,
+        from: fromEmail,
+        name: fromName,
+        subject,
+        html: message,
+        inReplyToMessageId: inReplyTo,
+      });
+
+      // Create draft using Gmail API
+      console.log("Creating draft...");
       const draft = await gmail.users.drafts.create({
         userId: "me",
         requestBody: { message: { raw, threadId } },
       });
 
+      console.log("Draft created:", draft.data);
+
+      // Insert into Supabase
+      console.log("Inserting draft info into Supabase...");
       const { error: insertionError } = await req.supabaseClient
         .from("Emails")
         .insert({
@@ -84,41 +103,31 @@ router.post(
         });
 
       if (insertionError) {
+        console.log("Error inserting into Supabase:", insertionError);
         return res.status(400).json({ message: "Insertion Error" });
       }
 
+      // Respond with the draft ID
+      console.log("Draft creation successful. Draft ID:", draft.data.id);
       return res.status(200).json({ draftId: draft.data.id });
     } catch (error) {
+      console.error("Error processing request:", error);
       return res.status(500).json({ message: "Internal Server Error", error });
     }
   }
 );
 
 router.post(
-  "/send-follow-up/:userId/:draftId/:trackingId",
+  "/send-follow-up/:draftId/:trackingId",
   verifyToken,
   async (req, res) => {
     const { draftId, trackingId } = req.params;
     const userId = req.user.sub;
     try {
-      const { data: tokenData, error: tokenFetchError } =
-        await req.supabaseClient
-          .from("User_Profiles")
-          .select("gmail_auth_token, gmail_refresh_token")
-          .eq("user_id", userId)
-          .single();
-
-      if (tokenFetchError || !tokenData) {
-        return res.status(400).json({ message: "Missing or invalid tokens" });
-      }
-
-      oauth2Client.setCredentials({
-        access_token: tokenData.gmail_auth_token,
-        refresh_token: tokenData.gmail_refresh_token,
+      const gmail = await configureOAuth({
+        userId,
+        supabase: req.supabaseClient,
       });
-
-      await oauth2Client.getAccessToken();
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
       const sendResponse = await gmail.users.drafts.send({
         userId: "me",
@@ -168,33 +177,15 @@ router.get(
       .eq("sent", false)
       .single();
 
-    if (draftFetchError || !draftData?.draft_id) {
-      return res.status(200).json({ draftExists: false });
+    if (draftFetchError) {
+      return res.status(400).json({ message: "Failed to Fetch Draft" });
     }
-
-    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (
-      tokenFetchError ||
-      !tokenData?.gmail_auth_token ||
-      !tokenData?.gmail_refresh_token
-    ) {
-      return res.status(401).json({ message: "Missing Gmail tokens" });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
 
     try {
-      await oauth2Client.getAccessToken();
-
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const gmail = await configureOAuth({
+        userId,
+        supabase: req.supabaseClient,
+      });
 
       const draft = await gmail.users.drafts.get({
         userId: "me",
@@ -227,35 +218,17 @@ router.get(
 );
 
 router.delete(
-  "/delete-follow-up-draft/:userId/:draftId",
+  "/delete-follow-up-draft/:draftId",
   verifyToken,
   async (req, res) => {
     const { draftId } = req.params;
     const userId = req.user.sub;
-    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (
-      tokenFetchError ||
-      !tokenData ||
-      !tokenData.gmail_auth_token ||
-      !tokenData.gmail_refresh_token
-    ) {
-      return res.status(404).json({ message: "Tokens not found" });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
 
     try {
-      await oauth2Client.getAccessToken();
-
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const gmail = await configureOAuth({
+        userId,
+        supabase: req.supabaseClient,
+      });
 
       await gmail.users.drafts.delete({
         userId: "me",
@@ -280,11 +253,12 @@ router.delete(
 );
 
 router.put(
-  "/update-follow-up-draft/:userId/:professorId/:threadId",
+  "/update-follow-up-draft/:professorId/:threadId",
+  verifyToken,
   async (req, res) => {
     const { professorId, threadId } = req.params;
     const { to, fromName, fromEmail, subject, body } = req.body;
-
+    console.log("fired");
     const userId = req.user.sub;
 
     const { data: draftData, error: draftFetchError } = await req.supabaseClient
@@ -295,29 +269,17 @@ router.put(
       .eq("type", "replydraft")
       .eq("sent", false)
       .single();
-
+    console.log(draftData);
+    console.log(draftFetchError);
     if (!draftData || draftFetchError || !draftData.draft_id) {
       return res.status(401).json({ updated: false });
     }
 
-    const { data: tokenData, error: tokenFetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (!tokenData || tokenFetchError) {
-      return res.status(401).json({ updated: false });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
-
     try {
-      await oauth2Client.getAccessToken();
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const gmail = await configureOAuth({
+        userId,
+        supabase: req.supabaseClient,
+      });
 
       const thread = await gmail.users.threads.get({
         userId: "me",
@@ -340,7 +302,8 @@ router.put(
         body,
         inReplyTo
       );
-      const draft = await gmail.users.drafts.update({
+
+      await gmail.users.drafts.update({
         userId: "me",
         id: draftData.draft_id,
         requestBody: { message: { raw, threadId } },
@@ -348,6 +311,7 @@ router.put(
 
       return res.status(200).json({ updated: true });
     } catch (err) {
+      console.log(err);
       return res.status(500).json({ updated: false });
     }
   }
@@ -460,66 +424,3 @@ router.delete("/delete-draft/:draftId", verifyToken, async (req, res) => {
 });
 
 export default router;
-
-/**
- * 
-router.post(
-  "/create-draft/:userId/:professorId",
-  verifyToken,
-  async (req, res) => {
-    const { professorId } = req.params;
-    const { to, fromName, fromEmail, subject, message } = req.body;
-    const userId = req.user.sub;
-
-    if (!to || !fromName || !fromEmail || !message) {
-      return res.status(400).json({message: "Missing Data"});
-    }
-
-    const { data: tokenData, error: fetchError } = await req.supabaseClient
-      .from("User_Profiles")
-      .select("gmail_auth_token, gmail_refresh_token")
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError || !tokenData) {
-      return res.status(401).json({message: ""});
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokenData.gmail_auth_token,
-      refresh_token: tokenData.gmail_refresh_token,
-    });
-
-    try {
-      await oauth2Client.getAccessToken();
-      //Create the body
-      const trackingId = uuidv4();
-      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-      const raw = makeBody(to, fromName, fromEmail, subject, message);
-      const draft = await gmail.users.drafts.create({
-        userId: "me",
-        requestBody: { message: { raw } },
-      });
-      const { error: insertionError } = await req.supabaseClient
-        .from("Emails")
-        .insert([
-          {
-            user_id: userId,
-            professor_id: parseInt(professorId),
-            draft_id: draft.data.id,
-            type: "first",
-            tracking_id: trackingId,
-          },
-        ]);
-
-      if (insertionError) {
-        return res.status(400).json({ message: "Insertion Error" });
-      }
-
-      return res.status(200).json({ draftId: draft.data.id });
-    } catch {
-      return res.status(500).json({ message: "Internal Server Error" });
-    }
-  }
-);
- */

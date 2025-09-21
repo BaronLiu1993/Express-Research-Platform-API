@@ -25,9 +25,8 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
 
 //Implement Pagination here, fix the send email with attachment function and clean up other logic
 router.get("/kanban/get-saved", verifyToken, async (req, res) => {
-  const { page = 1 } = req.body;
   const userId = req.user.sub;
-  const pageNumber = parseInt(page);
+  const pageNumber = 1;
   const limit = 10;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;

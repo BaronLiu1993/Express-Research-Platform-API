@@ -25,9 +25,8 @@ router.get("/repository/get-all-appliedId", verifyToken, async (req, res) => {
 
 //Get Kanban
 router.get("/kanban/get-in-progress", verifyToken, async (req, res) => {
-  const { page = 1 } = req.body;
   const userId = req.user.sub;
-  const pageNumber = parseInt(page);
+  const pageNumber = 1;
   const limit = 10;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;
@@ -52,9 +51,8 @@ router.get("/kanban/get-in-progress", verifyToken, async (req, res) => {
 });
 
 router.get("/fetch/draft", verifyToken, async (req, res) => {
-  const { page = 1 } = req.body;
   const userId = req.user.sub;
-  const pageNumber = parseInt(page);
+  const pageNumber = 1;
   const limit = 10;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;
