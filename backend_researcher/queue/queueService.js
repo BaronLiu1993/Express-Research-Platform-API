@@ -152,7 +152,7 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Fetch Drafts");
     }
 
-    const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="https://test-q97b.onrender.com/engagement/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
@@ -333,7 +333,7 @@ export async function sendSnippetEmailWithAttachments({
         throw new Error("No Files Found");
       }
     }
-    const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="https://test-q97b.onrender.com/engagement/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
@@ -577,7 +577,7 @@ export async function sendFollowUpEmail({
       throw new Error("Failed to fetch draftData after 3 attempts");
     }
 
-    const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="https://test-q97b.onrender.com/engagement/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
 
     // Get draft from Gmail
     const draft = await gmail.users.drafts.get({
@@ -714,7 +714,7 @@ export async function sendFollowUpWithAttachments({
       throw new Error("Failed to fetch draftData after 3 attempts");
     }
 
-    const trackingPixel = `<img src="https://test-q97b.onrender.com/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="https://test-q97b.onrender.com/engagement/pixel.png?analyticId=${draftData?.tracking_id}" width="1" height="1" style="display:none;" />`;
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,

@@ -20,7 +20,7 @@ router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
     const { data: messageData, error: messageDataError } =
       await req.supabaseClient
         .from("Messages")
-        .select("opened_email, opened_email_at")
+        .select("opened_email, opened_email_at, user_id")
         .eq("thread_id", threadId)
         .eq("message_id", messageId)
         .single();
@@ -51,12 +51,17 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
     console.log("[Step] Gmail OAuth configured successfully.");
 
     console.log("[Step] Fetching thread data...");
+
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
       format: "full",
     });
-    console.log("[Step] Thread data fetched:", threadData?.data?.messages?.length, "messages found.");
+    console.log(
+      "[Step] Thread data fetched:",
+      threadData?.data?.messages?.length,
+      "messages found."
+    );
 
     const messages = threadData?.data?.messages || [];
 
@@ -70,6 +75,15 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
           format: "raw",
         });
 
+        const { data: messageData, error: messageDataError } =
+          await req.supabaseClient
+            .from("Messages")
+            .select("opened_email, opened_email_at")
+            .eq("thread_id", threadId)
+            .eq("message_id", message.id)
+            .single();
+
+
         const raw = msgData?.data?.raw || "";
         console.log(`[Message ${index}] Raw message length:`, raw.length);
 
@@ -79,14 +93,15 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
 
         const replyParsed = new EmailReplyParser().read(parsed.text || "");
         const visibleBody = replyParsed.getVisibleText();
-        console.log(`[Message ${index}] Visible body length:`, visibleBody.length);
 
         return {
+          messageId: message.id, 
           labels: message.labelIds || [],
           to: parsed.to?.value?.[0] || {},
           from: parsed.from?.value?.[0] || {},
           subject: parsed.subject || "(No Subject)",
           body: visibleBody,
+          seenData: messageData,
           date: parsed.date || null,
         };
       })
@@ -99,7 +114,6 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
 
 router.get("/get-email-chain", verifyToken, async (req, res) => {
   const userId = req.user.sub;
