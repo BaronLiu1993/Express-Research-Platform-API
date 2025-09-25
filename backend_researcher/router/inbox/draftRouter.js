@@ -1,5 +1,4 @@
 import express from "express";
-import { google } from "googleapis";
 import {
   configureOAuth,
   extractHtmlOrPlainText,
@@ -17,46 +16,35 @@ router.post(
   verifyToken,
   async (req, res) => {
     const { professorId, threadId } = req.params;
-    const { to, fromName, fromEmail, subject, message } = req.body;
+    const { professorName, professorEmail, fromName, fromEmail } = req.body;
     const userId = req.user.sub;
 
-    // Log the incoming parameters and body
-    console.log("Received parameters:", { professorId, threadId });
-    console.log("Received body:", {
-      to,
-      fromName,
-      fromEmail,
-      subject,
-      message,
-    });
-    console.log("User ID:", userId);
+    const { data: draftData, error: draftFetchError } = await req.supabaseClient
+      .from("Emails")
+      .select("draft_id, tracking_id")
+      .eq("user_id", userId)
+      .eq("professor_id", professorId)
+      .eq("type", "replydraft")
+      .eq("sent", false)
+      .single();
 
-    // Validate required fields
-    if (!to || !fromName || !fromEmail) {
-      console.log("Missing required fields"); // Log if any required field is missing
-      return res.status(400).json({ message: "Missing required fields" });
+    if (draftData) {
+      return res.status(400).json({ message: "Draft Already Exists" });
     }
 
-    // Configure OAuth
-    console.log("Configuring OAuth...");
     const gmail = await configureOAuth({
       userId,
       supabase: req.supabaseClient,
     });
 
     try {
-      // Fetch the thread using Gmail API
-      console.log("Fetching thread...");
       const thread = await gmail.users.threads.get({
         userId: "me",
         id: threadId,
       });
 
-      console.log("Thread data fetched:", thread.data);
-
       const messages = thread.data.messages;
       const lastMessage = messages[messages.length - 1];
-      console.log("Last message in the thread:", lastMessage);
 
       // Extract Message-ID for the reply
       const messageIdHeader = lastMessage.payload.headers.find(
@@ -72,11 +60,11 @@ router.post(
       // Prepare raw message body
       console.log("Creating raw message body...");
       const raw = await makeReplyBody({
-        to,
+        to: professorEmail,
         from: fromEmail,
         name: fromName,
-        subject,
-        html: message,
+        subject: "",
+        html: "",
         inReplyToMessageId: inReplyTo,
       });
 
@@ -96,10 +84,13 @@ router.post(
         .insert({
           user_id: userId,
           thread_id: threadId,
+          professor_email: professorEmail,
+          professor_name: professorName,
           professor_id: parseInt(professorId),
           draft_id: draft.data.id,
           type: "replydraft",
           tracking_id: trackingId,
+          message_id: inReplyTo,
         });
 
       if (insertionError) {

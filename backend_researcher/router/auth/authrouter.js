@@ -43,8 +43,6 @@ router.get("/signup-with-google", async (req, res) => {
         },
       });
 
-    console.log(authError);
-    console.log(callbackData);
     if (authError) {
       return res.status(400).json({ message: "Authentication Error" });
     }
@@ -120,6 +118,7 @@ router.post("/oauth2callback/login", async (req, res) => {
 //Registration
 router.post("/oauth2callback/register", async (req, res) => {
   const code = req.body.code;
+
   if (!code) {
     return res.status(400).json({ message: "No code provided" });
   }
@@ -128,26 +127,30 @@ router.post("/oauth2callback/register", async (req, res) => {
     const { data: tokenData, error: tokenDataError } =
       await supabase.auth.exchangeCodeForSession(code);
 
-    if (tokenDataError || !tokenData.session) {
+
+    if (tokenDataError || !tokenData?.session) {
       return res
         .status(400)
         .json({ message: "Failed to exchange code for session" });
     }
 
-    const { session, user } = tokenData;
+    const { session } = tokenData;
+    const user = session.user; 
+
 
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
       .insert({
         user_id: user.id,
         student_email: user.email,
-        student_name: user.user_metadata.full_name,
+        student_name: user.user_metadata?.full_name,
         gmail_auth_token: encryptToken(session.provider_token),
         gmail_refresh_token: encryptToken(session.provider_refresh_token),
       });
 
-    //Duplicate Keys and this is where it fails and redirects
+
     if (tokenInsertionError) {
+      console.log("Insert failed (likely duplicate key).");
       return res
         .status(400)
         .json({ redirectURL: "/auth/signin", message: "User Already Exists" });
@@ -160,10 +163,10 @@ router.post("/oauth2callback/register", async (req, res) => {
       redirectURL: "/register",
     });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 router.post("/refresh-token", async (req, res) => {
   const { refreshToken } = req.body;
@@ -269,7 +272,6 @@ router.get("/check-profile-completed", verifyToken, async (req, res) => {
 
 //Registration Method
 router.post("/register", verifyToken, async (req, res) => {
-  console.log("fired");
   const {
     student_major,
     student_year,
@@ -279,7 +281,6 @@ router.post("/register", verifyToken, async (req, res) => {
 
   const userId = req.user.sub;
 
-  console.log(userId);
   if (
     !student_major ||
     !student_year ||
@@ -293,9 +294,7 @@ router.post("/register", verifyToken, async (req, res) => {
   try {
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
-    console.log(embeddings);
-    //Insert into User_Profiles
-    const { error: profileError } = await supabase
+    const { error: profileError } = await req.supabaseClient
       .from("User_Profiles")
       .update({
         student_major: student_major,
@@ -305,9 +304,7 @@ router.post("/register", verifyToken, async (req, res) => {
         student_embeddings: embeddings.data[0].embedding,
         finished_registration: true,
       })
-      .eq("user_id", userId)
-      .select()
-      .single();
+      .eq("user_id", userId);
 
     if (profileError) {
       console.log(profileError);
