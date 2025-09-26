@@ -46,19 +46,13 @@ router.post(
       const messages = thread.data.messages;
       const lastMessage = messages[messages.length - 1];
 
-      // Extract Message-ID for the reply
       const messageIdHeader = lastMessage.payload.headers.find(
         (h) => h.name === "Message-ID"
       );
       const inReplyTo = messageIdHeader?.value;
-      console.log("In-Reply-To message ID:", inReplyTo);
 
-      // Generate tracking ID
       const trackingId = uuidv4();
-      console.log("Generated tracking ID:", trackingId);
 
-      // Prepare raw message body
-      console.log("Creating raw message body...");
       const raw = await makeReplyBody({
         to: professorEmail,
         from: fromEmail,
@@ -68,17 +62,10 @@ router.post(
         inReplyToMessageId: inReplyTo,
       });
 
-      // Create draft using Gmail API
-      console.log("Creating draft...");
       const draft = await gmail.users.drafts.create({
         userId: "me",
         requestBody: { message: { raw, threadId } },
       });
-
-      console.log("Draft created:", draft.data);
-
-      // Insert into Supabase
-      console.log("Inserting draft info into Supabase...");
       const { error: insertionError } = await req.supabaseClient
         .from("Emails")
         .insert({

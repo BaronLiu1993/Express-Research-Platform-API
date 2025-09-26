@@ -41,7 +41,7 @@ router.post(
   async (req, res) => {
     const { userEmail, userName, professorData } = req.body;
     const userId = req.user.sub;
-    console.log("fired")
+    console.log("fired");
     try {
       const jobs = professorData.map((professor) => ({
         name: "follow-up-email-with-attachments",
@@ -102,7 +102,11 @@ router.post("/mass-send-followup", verifyToken, async (req, res) => {
 router.post("/snippet-create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
-  console.log(professorData);
+  if (professorData.length > 10) {
+    return res.status(400).json({ message: "Too Many Messages" });
+  }
+  console.log(professorData)
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
@@ -118,6 +122,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
         },
       },
     }));
+    console.log(jobs)
     await draftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
@@ -127,7 +132,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
 
 router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
-  console.log(professorData)
+  console.log(professorData);
   const userId = req.user.sub;
 
   try {
@@ -152,15 +157,10 @@ router.post("/mass-send-with-attachments", verifyToken, async (req, res) => {
   }
 });
 
-//fix the name and the email for sending first initial email and fix follow up
-//  so it is added to a thread and replied to a message, get attachments to work
-//  and then fix inbox and ui for uploading files to drive and pulling resume
-
 router.post("/mass-send", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-  console.log(userEmail)
-  console.log(userName)
+
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",

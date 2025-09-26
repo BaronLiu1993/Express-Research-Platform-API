@@ -14,6 +14,7 @@ function removeBracketPlaceholders(str) {
 
 router.post("/insert", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  console.log("fired")
   const { snippet_html, snippet_subject } = req.body;
 
   const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
@@ -39,12 +40,14 @@ router.post("/insert", verifyToken, async (req, res) => {
     const snippetId = insertionData.id;
     return res.status(200).json({ snippetId });
   } catch (err) {
+    console.log(err)
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
 router.post("/sync-fetchable-variables", verifyToken, async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
+  console.log("fired")
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
     return res.status(400).json({ message: "Invalid input arrays" });
   }
