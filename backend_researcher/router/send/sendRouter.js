@@ -41,7 +41,6 @@ router.post(
   async (req, res) => {
     const { userEmail, userName, professorData } = req.body;
     const userId = req.user.sub;
-    console.log("fired");
     try {
       const jobs = professorData.map((professor) => ({
         name: "follow-up-email-with-attachments",
@@ -105,7 +104,6 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
   if (professorData.length > 10) {
     return res.status(400).json({ message: "Too Many Messages" });
   }
-  console.log(professorData)
 
   try {
     const jobs = professorData.map((professor) => ({
@@ -122,7 +120,7 @@ router.post("/snippet-create-draft", verifyToken, async (req, res) => {
         },
       },
     }));
-    console.log(jobs)
+    console.log(jobs);
     await draftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {

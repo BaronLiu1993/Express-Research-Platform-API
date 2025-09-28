@@ -41,8 +41,6 @@ router.get("/get-seen/:threadId/:messageId", verifyToken, async (req, res) => {
 router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
   const { threadId } = req.params;
   const userId = req.user.sub;
-  console.log("[Route] /get-full-email-chain called with threadId:", threadId);
-
   try {
     const gmail = await configureOAuth({
       userId,
@@ -65,7 +63,6 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
 
     const messages = threadData?.data?.messages || [];
 
-    console.log("[Step] Parsing individual messages...");
     const messageArray = await Promise.all(
       messages.map(async (message, index) => {
         console.log(`[Message ${index}] Fetching message ID: ${message.id}`);
@@ -83,7 +80,6 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
             .eq("message_id", message.id)
             .single();
 
-
         const raw = msgData?.data?.raw || "";
         console.log(`[Message ${index}] Raw message length:`, raw.length);
 
@@ -95,7 +91,7 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
         const visibleBody = replyParsed.getVisibleText();
 
         return {
-          messageId: message.id, 
+          messageId: message.id,
           labels: message.labelIds || [],
           to: parsed.to?.value?.[0] || {},
           from: parsed.from?.value?.[0] || {},
@@ -116,13 +112,21 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
 });
 
 router.get("/get-email-chain", verifyToken, async (req, res) => {
+  const { page } = req.query;
+  console.log(page);
   const userId = req.user.sub;
+  const pageNumber = parseInt(page);
+  const limit = 1;
+  const from = (pageNumber - 1) * limit;
+  const to = from + limit - 1;
   try {
-    const { data: completedData, error: completedFetchError } =
-      await req.supabaseClient
-        .from("Completed")
-        .select("professor_id")
-        .eq("user_id", userId);
+    let query = req.supabaseClient
+      .from("Completed")
+      .select("professor_id")
+      .eq("user_id", userId);
+    query = query.range(from, to);
+
+    const { data: completedData, error: completedFetchError } = await query;
 
     if (completedFetchError || !completedData?.length) {
       return res
