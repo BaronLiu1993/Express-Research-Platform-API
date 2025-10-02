@@ -113,10 +113,9 @@ router.get("/get-full-email-chain/:threadId", verifyToken, async (req, res) => {
 
 router.get("/get-email-chain", verifyToken, async (req, res) => {
   const { page } = req.query;
-  console.log(page);
   const userId = req.user.sub;
   const pageNumber = parseInt(page);
-  const limit = 1;
+  const limit = 10;
   const from = (pageNumber - 1) * limit;
   const to = from + limit - 1;
   try {
