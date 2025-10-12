@@ -160,6 +160,21 @@ router.post("/oauth2callback/register", async (req, res) => {
     const { session } = tokenData;
     const user = session.user; 
 
+    //Check if user exists in the column
+    const { data: userExists, error: userDoesNotExist } = await supabase
+      .from("User_Profiles")
+      .select("userId")
+      .eq("userId", user.id)
+
+      //Fix the auth flow to work better 
+    if (userExists) {
+      return res.status(200).json({
+        user_id: user.id,
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token,
+        redirectURL: "/repository",
+      });
+    }
 
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
