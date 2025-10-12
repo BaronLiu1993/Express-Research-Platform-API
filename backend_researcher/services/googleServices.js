@@ -20,8 +20,6 @@ export function decodeBody(encoded) {
 }
 
 export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
-  console.log("test");
-  console.log(userId);
   try {
     const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
@@ -35,7 +33,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
 
     const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
     const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
-
     if (!decryptedRefreshToken) {
       throw new Error("No valid refresh token");
     }
@@ -48,9 +45,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
     const accessTokenResponse = await oauth2Client.getAccessToken();
     const newAccessToken = accessTokenResponse.token;
 
-    if (!newAccessToken) {
-      throw new Error("Failed to refresh access token");
-    }
 
     const encryptedAccessToken = encryptToken(newAccessToken);
 

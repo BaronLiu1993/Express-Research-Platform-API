@@ -15,7 +15,6 @@ import snippetsRouter from "./router/snippets/snippetsRouter.js";
 import inboxRouter from "./router/inbox/inboxRouter.js";
 import draftRouter from "./router/inbox/draftRouter.js";
 import engagementRouter from "./router/engagement/engagementRouter.js"
-import publicationRouter from "./router/publications/publicationsRouter.js"
 import storageRouter from "./router/storage/storageRouter.js";
 import grantRouter from "./router/grants/grantRouter.js"
 
@@ -53,7 +52,6 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 app.use("/storage", storageRouter);
 app.use("/auth", authRouter);
-app.use("/publication", publicationRouter);
 app.use("/grants", grantRouter);
 app.use("/completed", completedRouter);
 app.use("/saved", savedRouter);

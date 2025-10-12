@@ -81,11 +81,9 @@ export async function verifyToken(req, res, next) {
     req.supabaseClient = supabaseClient;
 
     next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }
 
-export async function encrypt() {}
 
-export async function decrypt() {}

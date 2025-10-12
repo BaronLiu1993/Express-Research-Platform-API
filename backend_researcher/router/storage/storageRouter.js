@@ -80,7 +80,6 @@ router.post(
   }
 );
 
-//Uploading Resumes
 router.post(
   "/upload-resume-links",
   verifyToken,
@@ -98,8 +97,10 @@ router.post(
         supabase: req.supabaseClient,
         fetchDrive: true,
       });
+      console.log(oAuthClient)
       
       const drive = oAuthClient.drive
+      console.log(file)
       const response = await drive.files.create({
         requestBody: {
           name: file.originalname,

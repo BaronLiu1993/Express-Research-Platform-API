@@ -65,7 +65,6 @@ router.get("/signin-with-google", async (req, res) => {
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
-            prompt: "consent",
           },
         },
       });
@@ -101,7 +100,31 @@ router.post("/oauth2callback/login", async (req, res) => {
       });
     }
 
-    const { session, user } = tokenData;
+    const { session } = tokenData;
+    const user = session.user; 
+
+    //Check if user exists in the column
+    const { error: userDoesNotExist } = await supabase
+      .from("User_Profiles")
+      .select("userId")
+      .eq("userId", user.id)
+
+      //Fix the auth flow to work better 
+    if (userDoesNotExist) {
+      const { error: tokenInsertionError } = await supabase
+      .from("User_Profiles")
+      .insert({
+        user_id: user.id,
+        student_email: user.email,
+        student_name: user.user_metadata?.full_name,
+        gmail_auth_token: encryptToken(session.provider_token),
+        gmail_refresh_token: encryptToken(session.provider_refresh_token),
+      });
+
+      if (tokenInsertionError) {
+        return res.status(400).json({message: "Failed"})
+      }
+    }
 
     return res.status(200).json({
       user_id: user.id,
@@ -251,6 +274,9 @@ router.get("/check-profile-completed", verifyToken, async (req, res) => {
 
   console.log(userId);
   try {
+    // Possibility that it does not exist at all
+
+
     const { data: profileData, error: profileError } = await req.supabaseClient
       .from("User_Profiles")
       .select("finished_registration")
