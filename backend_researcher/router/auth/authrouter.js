@@ -12,13 +12,6 @@ dotenv.config();
 
 const router = express.Router();
 
-//Initialise Gmail OAuth Client
-const oauth2Client = new google.auth.OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI
-);
-
 //Defined Scopes
 const scopes = [
   "email",
