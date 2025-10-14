@@ -4,7 +4,6 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 
-//Router
 import authRouter from "./router/auth/authRouter.js";
 import completedRouter from "./router/kanban/completed/completedRouter.js";
 import savedRouter from "./router/kanban/saved/savedRouter.js";
