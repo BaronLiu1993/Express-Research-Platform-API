@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { rateLimit } from "express-rate-limit";
 
-import authRouter from "./router/auth/authRouter.js";
+import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";
 
 dotenv.config();
