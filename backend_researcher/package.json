@@ -35,6 +35,7 @@
     "mustache": "^4.2.0",
     "nodemailer": "^7.0.5",
     "open": "^10.1.2",
+    "openai": "^6.3.0",
     "pgvector": "^0.2.0",
     "redis": "^5.5.6"
   },
