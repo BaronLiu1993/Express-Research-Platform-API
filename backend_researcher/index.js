@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import { rateLimit } from "express-rate-limit";
 
 import authRouter from "./router/auth/authrouter.js";
-import repositoryRouter from "./router/repository/repositoryRouter.js";
+import repositoryRouter from "./router/repository/repositoryRouter.js"
 
 dotenv.config();
 const app = express();
