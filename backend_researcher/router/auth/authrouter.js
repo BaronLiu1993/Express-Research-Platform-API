@@ -20,7 +20,7 @@ router.get("/signup-with-google", async (req, res) => {
         provider: "google",
         options: {
           redirectTo:
-            "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/register",
+            "https://t-search-test.vercel.app/account/register",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -48,7 +48,7 @@ router.get("/signin-with-google", async (req, res) => {
         provider: "google",
         options: {
           redirectTo:
-            "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/login",
+            "https://t-search-test.vercel.app/account/login",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
