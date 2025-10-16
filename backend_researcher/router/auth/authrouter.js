@@ -16,9 +16,6 @@ const router = express.Router();
 const scopes = [
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.compose",
-  "https://www.googleapis.com/auth/drive.file",
 ];
 
 router.get("/signup-with-google", async (req, res) => {
@@ -61,8 +58,6 @@ router.get("/signin-with-google", async (req, res) => {
           },
         },
       });
-    console.log(authError);
-    console.log(callbackData);
     if (authError) {
       return res.status(400).json({ message: "Authentication Error" });
     }

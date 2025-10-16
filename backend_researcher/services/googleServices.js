@@ -44,10 +44,7 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
 
     const accessTokenResponse = await oauth2Client.getAccessToken();
     const newAccessToken = accessTokenResponse.token;
-
-
     const encryptedAccessToken = encryptToken(newAccessToken);
-
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
       .update({ gmail_auth_token: encryptedAccessToken })

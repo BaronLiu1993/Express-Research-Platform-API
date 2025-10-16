@@ -20,7 +20,6 @@ const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
 });
 
-//Encrypt Into Database
 export function encryptToken(token) {
   try {
     const encryptedToken = CryptoJS.AES.encrypt(token, secretKey).toString();
