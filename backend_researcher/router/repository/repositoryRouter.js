@@ -47,8 +47,6 @@ router.get("/taishan/filter", verifyToken, async (req, res) => {
         values.map((v) => v.trim()).filter(Boolean)
       );
     }
-
-    // Pagination
     query = query.range(from, to);
 
     const { data: tableData, error: tableDataError } = await query;
@@ -64,7 +62,6 @@ router.get("/taishan/filter", verifyToken, async (req, res) => {
 });
 
 router.get("/taishan", verifyToken, async (req, res) => {
-  console.log("fired");
   const { page, search } = req.query;
   const pageNumber = parseInt(page) || 1;
   const limit = 20;
@@ -110,7 +107,6 @@ router.get("/taishan", verifyToken, async (req, res) => {
         tableCount: tableData.length,
       });
     } catch (err) {
-      console.error(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
@@ -129,7 +125,6 @@ router.get("/taishan", verifyToken, async (req, res) => {
       .range(from, to);
 
     if (tableFetchError) {
-      console.error(tableFetchError);
       return res.status(400).json({ message: "Failed to Fetch Table Data" });
     }
 
@@ -143,7 +138,6 @@ router.get("/match-professors", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   const match_count = 10;
   const match_threshold = 0.2;
-
   try {
     const { data: matches, error: matchesFetchError } =
       await req.supabaseClient.rpc("match_professors_for_student", {

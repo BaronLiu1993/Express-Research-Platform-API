@@ -63,7 +63,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     return gmail;
   } catch (err) {
-    console.log(err);
     throw new Error("Internal Server Error");
   }
 }

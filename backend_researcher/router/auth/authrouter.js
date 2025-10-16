@@ -13,10 +13,7 @@ dotenv.config();
 const router = express.Router();
 
 //Defined Scopes
-const scopes = [
-  "email",
-  "profile",
-];
+const scopes = ["email", "profile"];
 
 router.get("/signup-with-google", async (req, res) => {
   try {
@@ -73,44 +70,36 @@ router.get("/signin-with-google", async (req, res) => {
 //login
 router.post("/oauth2callback/login", async (req, res) => {
   const code = req.body.code;
-  if (!code) {
-    return res.status(400).json({ message: "No code provided" });
-  }
 
   try {
     const { data: tokenData, error: tokenDataError } =
       await supabase.auth.exchangeCodeForSession(code);
 
-    if (tokenDataError || !tokenData.session) {
-      return res.status(400).json({
-        message: "Failed to exchange code for session",
-        redirectURL: "/auth/signin",
-      });
+    if (tokenDataError || !tokenData?.session) {
+      return res
+        .status(400)
+        .json({ message: "Failed to exchange code for session" });
     }
-
     const { session } = tokenData;
-    const user = session.user; 
+    const user = session.user;
 
-    //Check if user exists in the column
     const { error: userDoesNotExist } = await supabase
       .from("User_Profiles")
-      .select("userId")
-      .eq("userId", user.id)
+      .select("user_id")
+      .eq("user_id", user.id)
+      .single();
 
-      //Fix the auth flow to work better 
     if (userDoesNotExist) {
       const { error: tokenInsertionError } = await supabase
-      .from("User_Profiles")
-      .insert({
-        user_id: user.id,
-        student_email: user.email,
-        student_name: user.user_metadata?.full_name,
-        gmail_auth_token: encryptToken(session.provider_token),
-        gmail_refresh_token: encryptToken(session.provider_refresh_token),
-      });
+        .from("User_Profiles")
+        .insert({
+          user_id: user.id,
+          student_email: user.email,
+          student_name: user.user_metadata?.full_name,
+        });
 
       if (tokenInsertionError) {
-        return res.status(400).json({message: "Failed"})
+        return res.status(400).json({ message: "Failed" });
       }
     }
 
@@ -121,8 +110,7 @@ router.post("/oauth2callback/login", async (req, res) => {
       redirectURL: "/repository",
     });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 
@@ -137,8 +125,6 @@ router.post("/oauth2callback/register", async (req, res) => {
   try {
     const { data: tokenData, error: tokenDataError } =
       await supabase.auth.exchangeCodeForSession(code);
-
-
     if (tokenDataError || !tokenData?.session) {
       return res
         .status(400)
@@ -146,16 +132,16 @@ router.post("/oauth2callback/register", async (req, res) => {
     }
 
     const { session } = tokenData;
-    const user = session.user; 
+    const user = session.user;
 
-    //Check if user exists in the column
     const { data: userExists, error: userDoesNotExist } = await supabase
       .from("User_Profiles")
-      .select("userId")
-      .eq("userId", user.id)
+      .select("user_id")
+      .eq("user_id", user.id)
+      .single();
 
-      //Fix the auth flow to work better 
-    if (userExists) {
+
+    if (!userDoesNotExist) {
       return res.status(200).json({
         user_id: user.id,
         accessToken: session.access_token,
@@ -170,13 +156,9 @@ router.post("/oauth2callback/register", async (req, res) => {
         user_id: user.id,
         student_email: user.email,
         student_name: user.user_metadata?.full_name,
-        gmail_auth_token: encryptToken(session.provider_token),
-        gmail_refresh_token: encryptToken(session.provider_refresh_token),
       });
 
-
     if (tokenInsertionError) {
-      console.log("Insert failed (likely duplicate key).");
       return res
         .status(400)
         .json({ redirectURL: "/auth/signin", message: "User Already Exists" });
@@ -193,7 +175,6 @@ router.post("/oauth2callback/register", async (req, res) => {
   }
 });
 
-
 router.post("/refresh-token", async (req, res) => {
   const { refreshToken } = req.body;
   try {
@@ -202,7 +183,6 @@ router.post("/refresh-token", async (req, res) => {
         refresh_token: refreshToken,
       });
 
-    console.log(tokenDataError);
     if (tokenDataError || !tokenData) {
       return res
         .status(401)
@@ -238,7 +218,6 @@ router.post("/sign-out", async (req, res) => {
 });
 
 router.get("/is-authenticated", async (req, res) => {
-  console.log("fired");
   try {
     const authHeader = req.headers.authorization;
 
@@ -247,13 +226,11 @@ router.get("/is-authenticated", async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-    console.log(token);
     if (!token) {
       return res.status(401).json({ success: false, message: "Missing token" });
     }
 
     const { data } = await supabase.auth.getUser(token);
-    console.log(data);
     if (!data.user) {
       return res
         .status(400)
@@ -271,23 +248,14 @@ router.get("/is-authenticated", async (req, res) => {
 });
 
 router.get("/check-profile-completed", verifyToken, async (req, res) => {
-  console.log("check profile");
   const userId = req.user.sub;
-  console.log("userId from token:", req.user.sub);
-
-  console.log(userId);
   try {
-    // Possibility that it does not exist at all
-
-
     const { data: profileData, error: profileError } = await req.supabaseClient
       .from("User_Profiles")
       .select("finished_registration")
       .eq("user_id", userId)
       .single();
-    console.log(profileData);
     if (profileError) {
-      console.log(profileError);
       return res.status(400).json({ message: "Fetch Error" });
     }
 
@@ -336,13 +304,10 @@ router.post("/register", verifyToken, async (req, res) => {
       .eq("user_id", userId);
 
     if (profileError) {
-      console.log(profileError);
       return res.status(400).json({ message: "Failed To Update" });
     }
-    console.log("done");
     return res.status(200).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -404,7 +369,6 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
       .select("user_id, student_name, student_email")
       .eq("user_id", user.id)
       .single();
-    console.log(profile);
     if (profileError) {
       return res.status(500).json({ message: "Failed to Fetch Profile" });
     }
@@ -418,37 +382,5 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
-/*
-router.post("/test-refresh-gmail", verifyToken, async (req, res) => {
-  const { accessToken, refreshToken } = req.body;
-  const userId = req.user.sub;
-
-  try {
-    const oauth2Client = await getGoogleClient({
-      accessToken,
-      refreshToken,
-      userId,
-      supabase: req.supabaseClient,
-    });
-
-    // Check if token is near expiry or was refreshed
-    const now = Date.now();
-    const expiry = oauth2Client.credentials.expiry_date || 0;
-    const refreshed = expiry < now + 5 * 60 * 1000; // refreshed if expires in less than 5 min
-
-    return res.status(200).json({
-      message: "Google client ready",
-      refreshed,
-      accessToken: oauth2Client.credentials.access_token,
-      refreshToken: oauth2Client.credentials.refresh_token,
-      expiry_date: oauth2Client.credentials.expiry_date,
-    });
-  } catch (err) {
-    console.error("Failed to get Google client:", err);
-    return res.status(500).json({ message: "Failed to refresh Google token", error: err.message });
-  }
-});
-*/
 
 export default router;
