@@ -19,7 +19,8 @@ router.get("/signup-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/register",
+          redirectTo:
+            "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/register",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -46,7 +47,8 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/login",
+          redirectTo:
+            "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/login",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -137,7 +139,6 @@ router.post("/oauth2callback/register", async (req, res) => {
       .select("user_id")
       .eq("user_id", user.id)
       .single();
-
 
     if (!userDoesNotExist) {
       return res.status(200).json({
