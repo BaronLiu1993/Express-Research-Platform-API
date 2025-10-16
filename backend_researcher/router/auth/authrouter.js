@@ -1,8 +1,6 @@
 import { supabase } from "../../supabase/supabase.js";
 import express from "express";
-import { google } from "googleapis";
 import {
-  encryptToken,
   generateEmbeddings,
   verifyToken,
 } from "../../services/authServices.js";
@@ -21,7 +19,7 @@ router.get("/signup-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:3000/account/register",
+          redirectTo: "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/register",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -48,7 +46,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "http://localhost:3000/account/login",
+          redirectTo: "https://research-outreach-automation-git-4b8e8c-baronliu1993s-projects.vercel.app/account/login",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
