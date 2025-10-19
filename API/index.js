@@ -7,6 +7,7 @@ import { rateLimit } from "express-rate-limit";
 
 import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js"
+import savedRouter from "./router/saved/savedRouter.js"
 
 dotenv.config();
 const app = express();
@@ -46,6 +47,8 @@ const limiter = rateLimit({
 app.use(limiter);
 app.use("/auth", authRouter);
 app.use("/repository", repositoryRouter);
+app.use("/saved", savedRouter);
+
 
 app.listen(process.env.PORT, () => {
   console.log(`Server listening on port`);
