@@ -52,7 +52,7 @@ router.get("/kanban/get-saved", verifyToken, async (req, res) => {
 
 router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const { professorId } = req.params; 
+  const { professorId } = req.params;
   const {
     name,
     email,
