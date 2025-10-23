@@ -52,8 +52,8 @@ router.get("/kanban/get-saved", verifyToken, async (req, res) => {
 
 router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  const { professorId } = req.params; 
   const {
-    professorId,
     name,
     email,
     url,
@@ -84,7 +84,7 @@ router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
     if (savedInsertionError) {
       return res
         .status(400)
-        .json({ message: "Could not fetch application data." });
+        .json({ message: "Could not add data to database." });
     }
 
     return res.status(200).json({ message: "Professor saved successfully." });
