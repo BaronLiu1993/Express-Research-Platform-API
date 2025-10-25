@@ -25,30 +25,60 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
 
 router.get("/kanban/get-saved", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const pageNumber = 1;
-  const limit = 10;
-  const from = (pageNumber - 1) * limit;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = 30;
+  const from = (page - 1) * limit;
   const to = from + limit - 1;
-
+  //Add optional filter if needed
   try {
-    let query = req.supabaseClient
-      .from("Saved")
-      .select("*")
-      .eq("user_id", userId);
-
-    query = query.range(from, to);
-
-    const { data: savedData, error: savedFetchError } = await query;
-
-    if (savedFetchError) {
+    const { data: savedData, error: savedDataFetchError } =
+      await req.supabaseClient
+        .from("Saved")
+        .select("*")
+        .eq("user_id", userId)
+        .range(from, to);
+    if (savedDataFetchError) {
       return res.status(400).json({ message: "Unable to Fetch Data" });
     }
 
     return res.status(200).json({ data: savedData });
-  } catch {
+  } catch (e) {
     return res.status(500).json({ message: "Internal Service Error" });
   }
 });
+
+router.put(
+  "/kanban/change-status/:professorId",
+  verifyToken,
+  async (req, res) => {
+    const userId = req.user.sub;
+    const { professorId } = req.params;
+    const { status } = req.body;
+    try {
+      const { error: savedUpdateError } = await req.supabaseClient
+        .from("Saved")
+        .update({ status })
+        .eq("user_id", userId)
+        .eq("professor_id", professorId)
+        .single();
+
+      if (savedUpdateError) {
+        return res.status(400).json({
+          completed: false,
+          message: "Failed To Update.",
+        });
+      }
+
+      return res
+        .status(200)
+        .json({ completed: true, message: "Professor Status Updated." });
+    } catch (err) {
+      return res
+        .status(500)
+        .json({ completed: false, message: "Internal Server Error" });
+    }
+  }
+);
 
 router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
   const userId = req.user.sub;
@@ -86,7 +116,6 @@ router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
         .status(400)
         .json({ message: "Could not add data to database." });
     }
-
     return res.status(200).json({ message: "Professor saved successfully." });
   } catch (err) {
     return res.status(500).json({ message: "An unexpected error occurred." });
