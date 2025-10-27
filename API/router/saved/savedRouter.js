@@ -29,7 +29,6 @@ router.get("/kanban/get-saved", verifyToken, async (req, res) => {
   const limit = 30;
   const from = (page - 1) * limit;
   const to = from + limit - 1;
-  //Add optional filter if needed
   try {
     const { data: savedData, error: savedDataFetchError } =
       await req.supabaseClient

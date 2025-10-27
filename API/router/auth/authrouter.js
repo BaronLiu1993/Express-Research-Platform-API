@@ -19,8 +19,7 @@ router.get("/signup-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo:
-            "https://anjiapp.vercel.app/account/register",
+          redirectTo: "https://paletteprod.vercel.app/account/register",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -47,8 +46,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo:
-            "https://anjiapp.vercel.app/account/login",
+          redirectTo: "https://paletteprod.vercel.app/account/login",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
