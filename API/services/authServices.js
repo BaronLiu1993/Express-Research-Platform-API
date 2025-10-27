@@ -25,7 +25,7 @@ export function encryptToken(token) {
     const encryptedToken = CryptoJS.AES.encrypt(token, secretKey).toString();
     return encryptedToken;
   } catch {
-    throw Error("Failed to Encrypt Token")
+    throw Error("Failed to Encrypt Token");
   }
 }
 
@@ -36,23 +36,26 @@ export function decryptToken(token) {
     const decryptedToken = bytes.toString(CryptoJS.enc.Utf8);
     return decryptedToken;
   } catch {
-    throw Error("Failed to Decrypt Token")
+    throw Error("Failed to Decrypt Token");
   }
 }
 
 export async function generateEmbeddings(research_input_embeddings) {
-  const embeddings = await OPEN_AI.embeddings.create({
-    model: "text-embedding-3-large",
-    input: research_input_embeddings,
-  });
-  return embeddings;
+  try {
+    const embeddings = await OPEN_AI.embeddings.create({
+      model: "text-embedding-3-large",
+      input: research_input_embeddings,
+    });
+    return embeddings;
+  } catch {
+    throw Error("Failed to Embed");
+  }
 }
 
 //Refresh In Here
 export async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    
     return res.status(401).json({ message: "Missing Authorization header" });
   }
 
@@ -61,12 +64,10 @@ export async function verifyToken(req, res, next) {
     return res.status(401).json({ message: "Missing token" });
   }
 
-
   try {
     const payload = jwt.verify(token, SUPABASE_JWT_SECRET, {
       algorithms: [SUPABASE_JWT_ALGORITHM],
     });
-
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
@@ -81,9 +82,7 @@ export async function verifyToken(req, res, next) {
     req.supabaseClient = supabaseClient;
 
     next();
-  } catch (err){
+  } catch (err) {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }
-
-
