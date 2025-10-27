@@ -6,8 +6,8 @@ import dotenv from "dotenv";
 import { rateLimit } from "express-rate-limit";
 
 import authRouter from "./router/auth/authrouter.js";
-import repositoryRouter from "./router/repository/repositoryRouter.js"
-import savedRouter from "./router/saved/savedRouter.js"
+import repositoryRouter from "./router/repository/repositoryRouter.js";
+import savedRouter from "./router/saved/savedRouter.js";
 
 dotenv.config();
 const app = express();
@@ -34,11 +34,11 @@ app.use((req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(bodyParser.json({ limit: "5mb" }));
-app.use(bodyParser.urlencoded({ limit: "5mb", extended: true }));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded());
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
+  max: 200,
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
@@ -49,7 +49,6 @@ app.use("/auth", authRouter);
 app.use("/repository", repositoryRouter);
 app.use("/saved", savedRouter);
 
-
 app.listen(process.env.PORT, () => {
-  console.log(`Server listening on port`);
+  console.log(`Server Started`);
 });

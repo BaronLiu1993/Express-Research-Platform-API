@@ -285,6 +285,10 @@ router.post("/register", verifyToken, async (req, res) => {
     return res.status(400).json({ message: "Incomplete Information" });
   }
 
+  if (student_interests.length > 3 || student_interests.length <= 0) {
+    return res.status(400).json({ message: "Invalid Interests" });
+  }
+
   try {
     const research_input_embeddings = student_interests.join();
     const embeddings = await generateEmbeddings(research_input_embeddings);
