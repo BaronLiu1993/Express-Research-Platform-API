@@ -59,7 +59,12 @@ router.get("/taishan", verifyToken, async (req, res) => {
     const filters = { school, faculty, department };
     for (const [key, val] of Object.entries(filters)) {
       if (val) {
-        const values = Array.isArray(val) ? val : [val];
+        const values = Array.isArray(val)
+          ? val
+          : String(val)
+              .split(",")
+              .map((v) => v.trim())
+              .filter(Boolean);
         query = query.in(key, values.map((v) => v.trim()).filter(Boolean));
       }
     }
@@ -74,7 +79,6 @@ router.get("/taishan", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
-
 
 router.get("/match-professors", verifyToken, async (req, res) => {
   const userId = req.user.sub;

@@ -4,6 +4,8 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { rateLimit } from "express-rate-limit";
+import "./queue/send/sendWorker.js"
+import "./queue/draft/draftWorker.js"
 
 import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";
