@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { generateDraftFromSnippetEmail } from "../../services/emailServices.js";
-import { Connection } from "../redis/redis.js";
+import { Connection } from "../../redis/redis.js";
 
 export const draftWorker = new Worker(
   "generate-draft",

@@ -13,9 +13,8 @@ function removeBracketPlaceholders(str) {
   return str.replace(/\{\{(.*?)\}\}/g, "$1");
 }
 
-router.post("/insert", verifyToken, async (req, res) => {
+router.post("/insert-snippet", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  console.log("fired");
   const { snippet_html, snippet_subject } = req.body;
 
   const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
@@ -30,23 +29,22 @@ router.post("/insert", verifyToken, async (req, res) => {
           snippet_subject: snippet_subject,
           snippet_name: `${userId}-${identifier}-email-snippet`,
         })
+        .select()
         .single();
 
     if (insertionError) {
       return res.status(400).json({ message: "Failed To Insert" });
     }
 
-    console.log(insertionError);
 
     const snippetId = insertionData.id;
     return res.status(200).json({ snippetId });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-router.post("/sync-fetchable-variables", verifyToken, async (req, res) => {
+router.post("/sync-variables", verifyToken, async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
   console.log("fired");
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
@@ -63,7 +61,6 @@ router.post("/sync-fetchable-variables", verifyToken, async (req, res) => {
   try {
     for (let i = 0; i < professorIdArray.length; i++) {
       const professorId = professorIdArray[i];
-      console.log(`🔍 Processing professorId [${i}]:`, professorId);
 
       const { data: constantData, error: constantError } =
         await req.supabaseClient
@@ -76,32 +73,21 @@ router.post("/sync-fetchable-variables", verifyToken, async (req, res) => {
         return res.status(400).json({ message: "Failed to Fetch" });
       }
 
-      const filteredFields = newVariableArray.filter(
-        (v) => v !== "publications"
-      );
-
       let variableData = {};
       if (filteredFields.length > 0) {
-        const { data, error: variableError } = await req.supabaseClient
-          .from("Taishan")
-          .select(filteredFields.join())
-          .eq("id", professorId)
-          .single();
+        const { data: filteredData, error: variableError } =
+          await req.supabaseClient
+            .from("Taishan")
+            .select(filteredFields.join())
+            .eq("id", professorId)
+            .single();
 
-        variableData = data || {};
-      }
-
-      let publicationData;
-      if (newVariableArray.includes("publications")) {
-        publicationData = "";
+        variableData = filteredData || {};
       }
 
       const dynamicFields = {};
       if (Object.keys(variableData).length > 0) {
         Object.assign(dynamicFields, variableData);
-      }
-      if (publicationData !== undefined) {
-        dynamicFields.publications = publicationData;
       }
 
       const resultEntry = {
@@ -117,11 +103,11 @@ router.post("/sync-fetchable-variables", verifyToken, async (req, res) => {
       result.push(resultEntry);
     }
 
-    return res.status(200).json({ result, status: "synced" });
+    return res.status(200).json({ result, completed: true });
   } catch {
     return res.status(500).json({
       message: "Internal Server Error",
-      status: "failed",
+      compelted: false,
     });
   }
 });

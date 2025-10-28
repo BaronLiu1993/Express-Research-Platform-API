@@ -4,7 +4,6 @@ import Mustache from "mustache";
 import { makeBody } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
 import { configureOAuth } from "../services/googleServices.js";
-
 dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

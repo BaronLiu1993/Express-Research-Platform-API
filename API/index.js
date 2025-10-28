@@ -10,13 +10,15 @@ import "./queue/draft/draftWorker.js"
 import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";
 import savedRouter from "./router/saved/savedRouter.js";
+import snippetRouter from "./router/snippet/snippetRouter.js"
+
 
 dotenv.config();
 const app = express();
 
 app.use(
   cors({
-    origin: "https://paletteprod.vercel.app",
+    origin: "http://localhost:3000",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
@@ -50,6 +52,8 @@ app.use(limiter);
 app.use("/auth", authRouter);
 app.use("/repository", repositoryRouter);
 app.use("/saved", savedRouter);
+app.use("/snippets", snippetRouter);
+
 
 app.listen(process.env.PORT, () => {
   console.log(`Server Started`);

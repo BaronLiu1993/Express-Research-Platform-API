@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
-import { sendSnippetEmail } from "./queueService.js";
-import { Connection } from "../redis/redis.js";
+import { sendSnippetEmail } from "../../services/emailServices.js";
+import { Connection } from "../../redis/redis.js";
 
 export const sendWorker = new Worker(
   "send-email",
