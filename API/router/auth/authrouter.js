@@ -100,6 +100,8 @@ router.post("/oauth2callback/login", async (req, res) => {
           user_id: user.id,
           student_email: user.email,
           student_name: user.user_metadata?.full_name,
+          gmail_auth_token: encryptToken(session.provider_token),
+          gmail_refresh_token: encryptToken(session.provider_refresh_token),
         });
 
       if (tokenInsertionError) {
@@ -159,6 +161,8 @@ router.post("/oauth2callback/register", async (req, res) => {
         user_id: user.id,
         student_email: user.email,
         student_name: user.user_metadata?.full_name,
+        gmail_auth_token: encryptToken(session.provider_token),
+        gmail_refresh_token: encryptToken(session.provider_refresh_token),
       });
 
     if (tokenInsertionError) {
@@ -307,8 +311,6 @@ router.post("/register", verifyToken, async (req, res) => {
         student_acceptedterms: student_acceptedterms,
         student_embeddings: embeddings.data[0].embedding,
         finished_registration: true,
-        gmail_auth_token: encryptToken(session.provider_token),
-        gmail_refresh_token: encryptToken(session.provider_refresh_token),
       })
       .eq("user_id", userId);
 
