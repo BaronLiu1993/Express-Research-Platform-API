@@ -11,7 +11,12 @@ dotenv.config();
 const router = express.Router();
 
 //Defined Scopes
-const scopes = ["email", "profile"];
+const scopes = [
+  "email",
+  "profile",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
+];
 
 router.get("/signup-with-google", async (req, res) => {
   try {

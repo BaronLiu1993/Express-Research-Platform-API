@@ -1,4 +1,4 @@
-import { Connection } from "../redis/redis.js";
+import { Connection } from "../../redis/redis.js";
 import { Queue } from "bullmq";
 
 const sendQueue = new Queue("send-email", {

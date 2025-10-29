@@ -48,10 +48,12 @@ router.post("/sync-variables", verifyToken, async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
   console.log("fired");
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
+    console.log("ess")
     return res.status(400).json({ message: "Invalid input arrays" });
   }
 
   if (variableArray.length === 0 || professorIdArray.length === 0) {
+    console.log("es")
     return res.status(400).json({ message: "User Sent Nothing" });
   }
 
@@ -74,13 +76,17 @@ router.post("/sync-variables", verifyToken, async (req, res) => {
       }
 
       let variableData = {};
-      if (filteredFields.length > 0) {
+      if (newVariableArray.length > 0) {
         const { data: filteredData, error: variableError } =
           await req.supabaseClient
             .from("Taishan")
-            .select(filteredFields.join())
+            .select(newVariableArray.join())
             .eq("id", professorId)
             .single();
+        
+        if (variableError) {
+            return res.status(400).json({ message: "Failed to Filter."})
+        }
 
         variableData = filteredData || {};
       }
@@ -104,7 +110,8 @@ router.post("/sync-variables", verifyToken, async (req, res) => {
     }
 
     return res.status(200).json({ result, completed: true });
-  } catch {
+  } catch (err) {
+    console.log(err)
     return res.status(500).json({
       message: "Internal Server Error",
       compelted: false,

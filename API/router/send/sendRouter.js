@@ -35,7 +35,7 @@ router.post("/create-draft", verifyToken, async (req, res) => {
   }
 });
 
-router.post("/mass-send", verifyToken, async (req, res) => {
+router.post("/send", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
 

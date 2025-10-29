@@ -79,30 +79,6 @@ export async function generateDraftFromSnippetEmail({
       throw new Error("Failed to Insert into Emails (FIRST)");
     }
 
-    const { data: savedData, error: savedError } = await supabase
-      .from("Saved")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("professor_id", professorId)
-      .single();
-
-    if (savedData) {
-      const { error: inProgressInsertionError } = await supabase
-        .from("InProgress")
-        .insert(savedData);
-      const { error: savedDeleteError } = await supabase
-        .from("Saved")
-        .delete()
-        .eq("user_id", userId)
-        .eq("professor_id", professorId);
-
-      if (inProgressInsertionError || savedDeleteError) {
-        throw new Error("Failed to Insert into Emails (FIRST)");
-      }
-    } else {
-      throw new Error("Failed to Saved");
-    }
-
     return { message: "Draft successfully created", completed: true };
   } catch (err) {
     return { message: "Failed to create draft", completed: false };
