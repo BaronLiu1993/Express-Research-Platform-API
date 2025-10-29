@@ -92,21 +92,33 @@ router.post("/oauth2callback/login", async (req, res) => {
       .select("user_id")
       .eq("user_id", user.id)
       .single();
-    console.log(session.provider_token)
-    console.log(session.provider_refresh_token)
-    console.log(session)
-    if (userDoesNotExist) {
-      const { error: tokenInsertionError } = await supabase
-        .from("User_Profiles")
-        .insert({
-          user_id: user.id,
-          student_email: user.email,
-          student_name: user.user_metadata?.full_name,
-          gmail_auth_token: encryptToken(session.provider_token),
-        });
 
-      if (tokenInsertionError) {
-        return res.status(400).json({ message: "Failed" });
+    if (userDoesNotExist) {
+      if (session.provider_refresh_token) {
+        const { error: tokenInsertionError } = await supabase
+          .from("User_Profiles")
+          .insert({
+            user_id: user.id,
+            student_email: user.email,
+            student_name: user.user_metadata?.full_name,
+            gmail_auth_token: encryptToken(session.provider_token),
+            gmail_refresh_token: encryptToken(session.provider_refresh_token),
+          });
+        if (tokenInsertionError) {
+          return res.status(400).json({ message: "Failed" });
+        }
+      } else {
+        const { error: tokenInsertionError } = await supabase
+          .from("User_Profiles")
+          .insert({
+            user_id: user.id,
+            student_email: user.email,
+            student_name: user.user_metadata?.full_name,
+            gmail_auth_token: encryptToken(session.provider_token),
+          });
+        if (tokenInsertionError) {
+          return res.status(400).json({ message: "Failed" });
+        }
       }
     }
 
@@ -156,13 +168,32 @@ router.post("/oauth2callback/register", async (req, res) => {
       });
     }
 
-    const { error: tokenInsertionError } = await supabase
-      .from("User_Profiles")
-      .insert({
-        user_id: user.id,
-        student_email: user.email,
-        student_name: user.user_metadata?.full_name
-      });
+    if (session.provider_refresh_token) {
+      const { error: tokenInsertionError } = await supabase
+        .from("User_Profiles")
+        .insert({
+          user_id: user.id,
+          student_email: user.email,
+          student_name: user.user_metadata?.full_name,
+          gmail_auth_token: encryptToken(session.provider_token),
+          gmail_refresh_token: encryptToken(session.provider_refresh_token),
+        });
+      if (tokenInsertionError) {
+        return res.status(400).json({ message: "Failed" });
+      }
+    } else {
+      const { error: tokenInsertionError } = await supabase
+        .from("User_Profiles")
+        .insert({
+          user_id: user.id,
+          student_email: user.email,
+          student_name: user.user_metadata?.full_name,
+          gmail_auth_token: encryptToken(session.provider_token),
+        });
+      if (tokenInsertionError) {
+        return res.status(400).json({ message: "Failed" });
+      }
+    }
 
     if (tokenInsertionError) {
       return res
