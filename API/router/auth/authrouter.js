@@ -160,9 +160,7 @@ router.post("/oauth2callback/register", async (req, res) => {
       .insert({
         user_id: user.id,
         student_email: user.email,
-        student_name: user.user_metadata?.full_name,
-        gmail_auth_token: encryptToken(session.provider_token),
-        gmail_refresh_token: encryptToken(session.provider_refresh_token),
+        student_name: user.user_metadata?.full_name
       });
 
     if (tokenInsertionError) {
