@@ -100,8 +100,6 @@ router.post("/oauth2callback/login", async (req, res) => {
           user_id: user.id,
           student_email: user.email,
           student_name: user.user_metadata?.full_name,
-          gmail_auth_token: encryptToken(session.provider_token),
-          gmail_refresh_token: encryptToken(session.provider_refresh_token),
         });
 
       if (tokenInsertionError) {
@@ -136,9 +134,11 @@ router.post("/oauth2callback/register", async (req, res) => {
         .status(400)
         .json({ message: "Failed to exchange code for session" });
     }
+    
 
     const { session } = tokenData;
     const user = session.user;
+    console.log(session)
 
     const { data: userExists, error: userDoesNotExist } = await supabase
       .from("User_Profiles")
