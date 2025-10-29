@@ -4,6 +4,7 @@ import {
   generateEmbeddings,
   verifyToken,
 } from "../../services/authServices.js";
+import { encryptToken } from "../../services/authServices.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -306,6 +307,8 @@ router.post("/register", verifyToken, async (req, res) => {
         student_acceptedterms: student_acceptedterms,
         student_embeddings: embeddings.data[0].embedding,
         finished_registration: true,
+        gmail_auth_token: encryptToken(session.provider_token),
+        gmail_refresh_token: encryptToken(session.provider_refresh_token),
       })
       .eq("user_id", userId);
 
