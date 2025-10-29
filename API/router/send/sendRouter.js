@@ -9,9 +9,6 @@ const router = express.Router();
 router.post("/create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
   const userId = req.user.sub;
-  if (professorData.length > 10) {
-    return res.status(400).json({ message: "Too Many Messages" });
-  }
   try {
     const jobs = professorData.map((professor) => ({
       name: "generate-draft",
