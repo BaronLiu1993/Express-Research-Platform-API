@@ -195,12 +195,6 @@ router.post("/oauth2callback/register", async (req, res) => {
       }
     }
 
-    if (tokenInsertionError) {
-      return res
-        .status(400)
-        .json({ redirectURL: "/auth/signin", message: "User Already Exists" });
-    }
-
     return res.status(200).json({
       user_id: user.id,
       accessToken: session.access_token,
