@@ -31,9 +31,11 @@ export function encryptToken(token) {
 
 //Decrypt When Making Function Calls
 export function decryptToken(token) {
+  console.log("fixed")
   try {
     const bytes = CryptoJS.AES.decrypt(token, secretKey);
     const decryptedToken = bytes.toString(CryptoJS.enc.Utf8);
+    console.log({ decryptedToken });
     return decryptedToken;
   } catch {
     throw Error("Failed to Decrypt Token");

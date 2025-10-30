@@ -20,19 +20,33 @@ export function decodeBody(encoded) {
 }
 
 export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
+  console.log("[configureOAuth] start", { userId, fetchDrive });
+
   try {
+    console.log("[configureOAuth] querying tokens from User_Profiles", { userId });
     const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
       .select("gmail_auth_token, gmail_refresh_token")
       .eq("user_id", userId)
       .single();
 
+    console.log("[configureOAuth] token query result", {
+      hasData: !!tokenData,
+      tokenError,
+      authTokenPresent: !!tokenData?.gmail_auth_token,
+      refreshTokenPresent: !!tokenData?.gmail_refresh_token,
+    });
+
     if (tokenError || !tokenData) {
+      console.log("[configureOAuth] no tokens found", { tokenError });
       throw new Error("No tokens found for user");
     }
 
     const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
     const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
+
+   
+
     if (!decryptedRefreshToken) {
       throw new Error("No valid refresh token");
     }
@@ -44,11 +58,13 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
 
     const accessTokenResponse = await oauth2Client.getAccessToken();
     const newAccessToken = accessTokenResponse.token;
+
     const encryptedAccessToken = encryptToken(newAccessToken);
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
       .update({ gmail_auth_token: encryptedAccessToken })
       .eq("user_id", userId);
+
 
     if (tokenInsertionError) {
       throw new Error("Failed to Insert Token");
@@ -66,6 +82,7 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
     throw new Error("Internal Server Error");
   }
 }
+
 
 export async function getDriveFileBuffer(fileId, drive) {
   const res = await drive.files.get(

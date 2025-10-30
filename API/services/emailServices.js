@@ -16,9 +16,11 @@ export async function generateDraftFromSnippetEmail({
   accessToken,
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail, toName } = body;
+
   if (!snippetId || !to || !fromName || !fromEmail || !toName) {
-    throw new Error("Missing required inputs");
+    return { message: "Missing Inputs", completed: false };
   }
+
   const trackingId = uuidv4();
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -35,11 +37,11 @@ export async function generateDraftFromSnippetEmail({
       .from("snippets")
       .select("*")
       .eq("user_id", userId)
-      .eq("id", snippetId.snippetId)
+      .eq("id", snippetId)
       .single();
 
     if (snippetError) {
-      return { message: "Failed fetching snippet" };
+      return { message: "Snippet Error", completed: false };
     }
 
     const snippetHTML = snippetData.snippet_html;
@@ -76,7 +78,7 @@ export async function generateDraftFromSnippetEmail({
     ]);
 
     if (insertionError) {
-      throw new Error("Failed to Insert into Emails (FIRST)");
+      return { message: "Insertion Error", completed: true };
     }
 
     return { message: "Draft successfully created", completed: true };
