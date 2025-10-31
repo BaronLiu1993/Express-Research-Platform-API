@@ -4,6 +4,8 @@ import Mustache from "mustache";
 import { makeBody } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
 import { configureOAuth } from "../services/googleServices.js";
+import { simpleParser } from "mailparser";
+
 dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -107,15 +109,12 @@ export async function sendSnippetEmail({
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     },
   });
 
   try {
     const gmail = await configureOAuth({ userId, supabase });
-
     const { data: draftData, error: draftFetchError } = await supabase
       .from("Emails")
       .select("draft_id, tracking_id")
@@ -129,19 +128,31 @@ export async function sendSnippetEmail({
     }
 
     const trackingPixel = `<img src="https://test-q97b.onrender.com/engagement/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
-
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
 
     const payload = draft.data.message.payload;
+    let base64UrlData = draft.data.message.payload.parts[1].body.data;
+    const headers = draft.data.message.payload.headers;
+    const subject = headers.find((header) => header.name === "Subject");
     const parentMessageIdHeader = payload.headers.find(
       (h) => h.name.toLowerCase() === "message-id"
     ).value;
-    const headers = payload.headers;
-    const subject = headers.find((h) => h.name === "Subject")?.value;
-    const htmlBody = extractHtmlOrPlainText(payload);
+
+    if (Buffer.isBuffer(base64UrlData)) {
+      base64UrlData = base64UrlData.toString("utf8");
+    }
+
+    if (typeof base64UrlData !== "string") {
+      return res.status(400).json({ message: "Failed to Parse" });
+    }
+
+    const base64Data = base64UrlData.replace(/-/g, "+").replace(/_/g, "/");
+    const buffer = Buffer.from(base64Data, "base64");
+    const parsedData = await simpleParser(buffer);
+    const htmlBody = parsedData.headerLines[0].line;
     const finalHtmlBody = htmlBody + trackingPixel;
 
     const raw = await makeBody({
@@ -160,46 +171,16 @@ export async function sendSnippetEmail({
 
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
-      requestBody: {
-        id: draftData.draft_id,
-      },
+      requestBody: { id: draftData.draft_id },
     });
 
-    const { error: insertionError } = await supabase
+    const { error: deletionError } = await supabase
       .from("Emails")
-      .update({
-        sent: true,
-        type: "first",
-        message_id: sendResponse.data.id,
-        thread_id: sendResponse.data.threadId,
-        message_id: parentMessageIdHeader,
-      })
+      .delete()
       .eq("draft_id", draftData.draft_id);
 
-    if (insertionError) {
-      throw new Error("Failed to Insert into Database");
-    }
-
-    const { data: inProgressData } = await supabase
-      .from("InProgress")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("professor_id", body.professorId)
-      .single();
-
-    if (inProgressData) {
-      const { error: completedInsertionError } = await supabase
-        .from("Completed")
-        .insert(inProgressData);
-      const { error: inProgressionDeletionError } = await supabase
-        .from("InProgress")
-        .delete()
-        .eq("user_id", userId)
-        .eq("professor_id", body.professorId);
-
-      if (completedInsertionError || inProgressionDeletionError) {
-        throw new Error("Failed to Insert or Delete from Database");
-      }
+    if (deletionError) {
+      throw new Error("Failed to Delete");
     }
 
     const { error: messageInsertionError } = await supabase
@@ -207,7 +188,7 @@ export async function sendSnippetEmail({
       .insert({
         user_id: userId,
         thread_id: sendResponse.data.threadId,
-        message_id: sendResponse.data.id,
+        message_id: parentMessageIdHeader,
         tracking_id: draftData.tracking_id,
         type: "first",
       });
@@ -217,7 +198,7 @@ export async function sendSnippetEmail({
     }
 
     return { message: "Successfully Sent!" };
-  } catch {
+  } catch (err) {
     return { message: "Internal Server Error" };
   }
 }

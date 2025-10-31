@@ -2,7 +2,7 @@ import express from "express";
 import draftQueue from "../../queue/draft/draftQueue.js";
 import sendQueue from "../../queue/send/sendQueue.js";
 import { verifyToken } from "../../services/authServices.js";
-import { configureOAuth } from "../../services/googleServices.js";
+import { configureOAuth, makeBody } from "../../services/googleServices.js";
 import { simpleParser } from "mailparser";
 
 const router = express.Router();
@@ -32,10 +32,10 @@ router.post("/create-draft", verifyToken, async (req, res) => {
   }
 });
 
-router.post("/send", verifyToken, async (req, res) => {
+router.post("/send-draft", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-
+  console.log(req.body)
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
@@ -45,7 +45,7 @@ router.post("/send", verifyToken, async (req, res) => {
         userName,
         accessToken: req.token,
         body: {
-          professorId: professor.id,
+          professorId: professor.professor_id,
           professorEmail: professor.email,
           professorName: professor.name,
         },
@@ -65,14 +65,12 @@ router.get("/get-drafts", verifyToken, async (req, res) => {
       .from("Emails")
       .select("*")
       .eq("user_id", userId);
-    console.log(draftsData);
     if (draftError) {
       return res.status(400).json({ message: "Failed To Fetch Drafts" });
     }
 
     return res.status(200).json({ data: draftsData });
   } catch (err) {
-    console.log(err);
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });
@@ -80,7 +78,6 @@ router.get("/get-drafts", verifyToken, async (req, res) => {
 router.get("/get-singular-draft", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   const { draftId } = req.query;
-  console.log(draftId);
 
   try {
     const gmail = await configureOAuth({
@@ -113,8 +110,70 @@ router.get("/get-singular-draft", verifyToken, async (req, res) => {
       html: parsedData.headerLines[0].line,
     });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "Failed to fetch and parse draft" });
+  }
+});
+
+router.put("/update-draft", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
+  const { draftId } = req.query;
+  const { to, fromEmail, fromName, subject, body } = req.body;
+  try {
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
+    const raw = await makeBody({
+      to,
+      from: fromEmail,
+      name: fromName,
+      subject,
+      html: body,
+    });
+    await gmail.users.drafts.update({
+      userId: "me",
+      id: draftId,
+      requestBody: { message: { raw } },
+    });
+
+    return res
+      .status(200)
+      .json({ updated: true, message: "Successfully Completed" });
+  } catch {
+    return res
+      .status(500)
+      .json({ updated: false, message: "Internal Server Error" });
+  }
+});
+
+router.delete("/delete-draft", verifyToken, async (req, res) => {
+  const { draftId } = req.query;
+  const userId = req.user.sub;
+  try {
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
+
+    await gmail.users.drafts.delete({
+      userId: "me",
+      id: draftId,
+    });
+
+    const { error: draftDeleteError } = await req.supabaseClient
+      .from("Emails")
+      .delete()
+      .eq("draft_id", draftId);
+
+    if (draftDeleteError) {
+      console.log(draftDeleteError)
+      return res.status(400).json({ message: "Failed To Delete" });
+    }
+
+    return res.status(200).json({ message: "Deleted Successfully" });
+  } catch (err) {
+    console.log(err)
+    return res.status(500).json({ message: "Internal Server Errors" });
   }
 });
 
