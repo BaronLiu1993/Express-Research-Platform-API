@@ -19,7 +19,6 @@ router.get("/pixel.png", async (req, res) => {
         .update({ opened_email_at: timestamp, opened_email: true })
         .eq("tracking_id", analyticId);
 
-      console.log("Update error:", updateError);
 
       if (updateError) {
         return res.status(400).json({ message: "Failed to update" });

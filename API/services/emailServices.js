@@ -190,6 +190,7 @@ export async function sendSnippetEmail({
         thread_id: sendResponse.data.threadId,
         message_id: parentMessageIdHeader,
         tracking_id: draftData.tracking_id,
+        subject: subject,
         type: "first",
       });
 

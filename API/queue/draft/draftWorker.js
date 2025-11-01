@@ -6,10 +6,6 @@ export const draftWorker = new Worker(
   "generate-draft",
   async (job) => {
     const { userId, professorId, body, accessToken } = job.data;
-    console.log(userId)
-    console.log(professorId)
-    console.log(body)
-    console.log(accessToken)
     try {
       const result = await generateDraftFromSnippetEmail({
         userId,
