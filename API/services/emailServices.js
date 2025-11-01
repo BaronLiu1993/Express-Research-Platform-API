@@ -127,7 +127,7 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Fetch Drafts");
     }
 
-    const trackingPixel = `<img src="https://test-q97b.onrender.com/engagement/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="https://test.com/engagement/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
