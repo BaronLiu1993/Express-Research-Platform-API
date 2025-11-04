@@ -35,7 +35,6 @@ router.post("/create-draft", verifyToken, async (req, res) => {
 router.post("/send-draft", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
   const userId = req.user.sub;
-  console.log(req.body)
   try {
     const jobs = professorData.map((professor) => ({
       name: "send-email",
@@ -166,13 +165,11 @@ router.delete("/delete-draft", verifyToken, async (req, res) => {
       .eq("draft_id", draftId);
 
     if (draftDeleteError) {
-      console.log(draftDeleteError)
       return res.status(400).json({ message: "Failed To Delete" });
     }
 
     return res.status(200).json({ message: "Deleted Successfully" });
   } catch (err) {
-    console.log(err)
     return res.status(500).json({ message: "Internal Server Errors" });
   }
 });

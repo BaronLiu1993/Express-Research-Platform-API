@@ -38,9 +38,8 @@ router.get("/get-threads", verifyToken, async (req, res) => {
 });
 
 router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
-  const { threadId } = req.query;
+  const { threadId, professorName, professorEmail } = req.query;
   const userId = req.user.sub;
-  console.log("fired")
   try {
     const gmail = await configureOAuth({
       userId,
@@ -49,45 +48,54 @@ router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
-      format: "raw",
     });
 
     const messages = threadData?.data?.messages || [];
-
     const { data: seenRows } = await req.supabaseClient
       .from("Messages")
-      .select("message_id, opened_email, opened_email_at")
+      .select("opened_email, opened_email_at, identifier_id")
       .eq("thread_id", threadId);
-
-    const seenMap = new Map((seenRows || []).map((r) => [r.message_id, r]));
-
+    const seenMap = new Map((seenRows || []).map((r) => [r.identifier_id, r]));
     const messageArray = await Promise.all(
       messages.map(async (m) => {
-        const rawMessage = Buffer.from(
-          m.raw.replace(/-/g, "+").replace(/_/g, "/"),
-          "base64"
-        ).toString("utf8");
-        const parsed = await simpleParser(rawMessage);
-        const seenData = seenMap.get(m.id) || null; 
-        return {
-          messageId: m.id,
-          labels: m.labelIds || [],
-          to: parsed.to?.text || null,
-          from: parsed.from?.text || null,
-          subject: parsed.subject || "(No Subject)",
-          body: parsed.text || parsed.html || "",
-          htmlBody: parsed.html || null,
-          seenData,
-          date: parsed.date || null,
-          messageIdHeader: parsed.messageId || null,
-        };
+        let base64UrlData = m.payload.parts[1].body.data;
+        if (Buffer.isBuffer(base64UrlData)) {
+          base64UrlData = base64UrlData.toString("utf8");
+        }
+
+        const headers = m.payload.headers;
+        const parentMessageIdHeader = headers.find(
+          (h) => h.name.toLowerCase() === "message-id"
+        ).value;
+        const subject = headers.find((header) => header.name === "Subject");
+        const to = headers.find((header) => header.name === "To");
+        const from = headers.find((header) => header.name === "From");
+        const date = headers.find((header) => header.name === "Date");
+
+        if (typeof base64UrlData === "string") {
+          const base64Data = base64UrlData
+            .replace(/-/g, "+")
+            .replace(/_/g, "/");
+          const buffer = Buffer.from(base64Data, "base64");
+          const parsed = await simpleParser(buffer);
+          const seenData = seenMap.get(m.id) || null;
+          return {
+            id: m.id,
+            to: to.value || null,
+            date: date.value,
+            from: from.value || null,
+            subject: subject.value || "(No Subject)",
+            body: parsed.headerLines[0].line || "",
+            seenData: seenData || null,
+            messageIdHeader: parentMessageIdHeader || null,
+          };
+        }
       })
     );
 
-    console.log(`[Success] Parsed ${messageArray.length} messages`);
     return res.status(200).json({ messageArray });
   } catch (err) {
-    console.error("[Error]", err);
+    console.log(err)
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });

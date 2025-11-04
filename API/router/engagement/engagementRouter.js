@@ -9,7 +9,7 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-router.get("/pixel.png", async (req, res) => {
+router.get("/hi.png", async (req, res) => {
   try {
     const { analyticId } = req.query;
     if (analyticId) {
@@ -25,7 +25,7 @@ router.get("/pixel.png", async (req, res) => {
       }
     }
 
-    res.sendFile(path.join(__dirname, "public", "pixel.png"), {
+    res.sendFile(path.join(__dirname, "public", "hi.png"), {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "no-cache, no-store, must-revalidate",

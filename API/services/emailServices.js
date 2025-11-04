@@ -10,6 +10,7 @@ dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const BACKEND_API_BASE = process.env.BACKEND_API_BASE;
 
 export async function generateDraftFromSnippetEmail({
   userId,
@@ -127,7 +128,7 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Fetch Drafts");
     }
 
-    const trackingPixel = `<img src="https://test.com/engagement/pixel.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
@@ -137,7 +138,7 @@ export async function sendSnippetEmail({
     let base64UrlData = draft.data.message.payload.parts[1].body.data;
     const headers = draft.data.message.payload.headers;
     const subject = headers.find((header) => header.name === "Subject");
-    const parentMessageIdHeader = payload.headers.find(
+    const parentMessageIdHeader = headers.find(
       (h) => h.name.toLowerCase() === "message-id"
     ).value;
 
@@ -190,10 +191,11 @@ export async function sendSnippetEmail({
         thread_id: sendResponse.data.threadId,
         message_id: parentMessageIdHeader,
         tracking_id: draftData.tracking_id,
-        subject: subject,
+        subject: subject.value,
         type: "first",
         name: body.professorName,
-        email: body.professorEmail
+        email: body.professorEmail,
+        identifier_id: sendResponse.data.id,
       });
 
     if (messageInsertionError) {

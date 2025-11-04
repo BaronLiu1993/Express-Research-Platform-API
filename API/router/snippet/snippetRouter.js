@@ -46,14 +46,11 @@ router.post("/insert-snippet", verifyToken, async (req, res) => {
 
 router.post("/sync-variables", verifyToken, async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
-  console.log("fired");
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
-    console.log("ess")
     return res.status(400).json({ message: "Invalid input arrays" });
   }
 
   if (variableArray.length === 0 || professorIdArray.length === 0) {
-    console.log("es")
     return res.status(400).json({ message: "User Sent Nothing" });
   }
 
@@ -111,7 +108,6 @@ router.post("/sync-variables", verifyToken, async (req, res) => {
 
     return res.status(200).json({ result, completed: true });
   } catch (err) {
-    console.log(err)
     return res.status(500).json({
       message: "Internal Server Error",
       compelted: false,
