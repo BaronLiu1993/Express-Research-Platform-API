@@ -192,6 +192,8 @@ export async function sendSnippetEmail({
         tracking_id: draftData.tracking_id,
         subject: subject,
         type: "first",
+        name: body.professorName,
+        email: body.professorEmail
       });
 
     if (messageInsertionError) {

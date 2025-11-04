@@ -12,6 +12,7 @@ import repositoryRouter from "./router/repository/repositoryRouter.js";
 import savedRouter from "./router/saved/savedRouter.js";
 import snippetRouter from "./router/snippet/snippetRouter.js"
 import sendRouter from "./router/send/sendRouter.js"
+import inboxRouter from "./router/inbox/inboxRouter.js"
 
 
 dotenv.config();
@@ -55,6 +56,7 @@ app.use("/repository", repositoryRouter);
 app.use("/saved", savedRouter);
 app.use("/snippets", snippetRouter);
 app.use("/email", sendRouter);
+app.use("/inbox", inboxRouter);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server Started`);

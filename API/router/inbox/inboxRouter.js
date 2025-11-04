@@ -4,6 +4,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
 import { simpleParser } from "mailparser";
+import { configureOAuth } from "../../services/googleServices.js";
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ router.get("/get-threads", verifyToken, async (req, res) => {
 router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
   const { threadId } = req.query;
   const userId = req.user.sub;
+  console.log("fired")
   try {
     const gmail = await configureOAuth({
       userId,
@@ -66,7 +68,7 @@ router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
           "base64"
         ).toString("utf8");
         const parsed = await simpleParser(rawMessage);
-        const seenData = seenMap.get(m.id) || null; //Professor will have nothing
+        const seenData = seenMap.get(m.id) || null; 
         return {
           messageId: m.id,
           labels: m.labelIds || [],
@@ -89,3 +91,5 @@ router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+export default router;
