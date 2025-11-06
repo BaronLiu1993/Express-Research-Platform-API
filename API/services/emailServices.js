@@ -105,9 +105,11 @@ export async function sendSnippetEmail({
     !body?.professorEmail ||
     !accessToken
   ) {
+    console.log("Error: Missing required inputs");
     throw new Error("Missing required inputs");
   }
 
+  console.log("Creating Supabase client...");
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -115,7 +117,10 @@ export async function sendSnippetEmail({
   });
 
   try {
+    console.log("Configuring OAuth...");
     const gmail = await configureOAuth({ userId, supabase });
+
+    console.log("Fetching draft data...");
     const { data: draftData, error: draftFetchError } = await supabase
       .from("Emails")
       .select("draft_id, tracking_id")
@@ -125,14 +130,21 @@ export async function sendSnippetEmail({
       .single();
 
     if (draftFetchError) {
+      console.log("Error fetching draft data:", draftFetchError);
       throw new Error("Failed to Fetch Drafts");
     }
 
+    console.log("Draft data fetched:", draftData);
+
     const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    console.log("Generated tracking pixel:", trackingPixel);
+
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
+
+    console.log("Fetched draft:", draft);
 
     const payload = draft.data.message.payload;
     let base64UrlData = draft.data.message.payload.parts[1].body.data;
@@ -142,11 +154,16 @@ export async function sendSnippetEmail({
       (h) => h.name.toLowerCase() === "message-id"
     ).value;
 
+    console.log("Base64 Data:", base64UrlData);
+    console.log("Subject:", subject);
+    console.log("Parent Message ID Header:", parentMessageIdHeader);
+
     if (Buffer.isBuffer(base64UrlData)) {
       base64UrlData = base64UrlData.toString("utf8");
     }
 
     if (typeof base64UrlData !== "string") {
+      console.log("Error: Failed to parse Base64 Data");
       return res.status(400).json({ message: "Failed to Parse" });
     }
 
@@ -156,6 +173,9 @@ export async function sendSnippetEmail({
     const htmlBody = parsedData.headerLines[0].line;
     const finalHtmlBody = htmlBody + trackingPixel;
 
+    console.log("Parsed HTML body:", parsedData.headerLines[0].line);
+    console.log("Final HTML body with tracking pixel:", finalHtmlBody);
+
     const raw = await makeBody({
       to: body.professorEmail,
       from: userName,
@@ -164,16 +184,22 @@ export async function sendSnippetEmail({
       html: finalHtmlBody,
     });
 
+    console.log("Generated raw email:", raw);
+
     await gmail.users.drafts.update({
       userId: "me",
       id: draftData.draft_id,
       requestBody: { message: { raw } },
     });
 
+    console.log("Draft updated successfully.");
+
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
     });
+
+    console.log("Email sent successfully:", sendResponse);
 
     const { error: deletionError } = await supabase
       .from("Emails")
@@ -181,8 +207,11 @@ export async function sendSnippetEmail({
       .eq("draft_id", draftData.draft_id);
 
     if (deletionError) {
+      console.log("Error deleting draft:", deletionError);
       throw new Error("Failed to Delete");
     }
+
+    console.log("Draft deleted successfully.");
 
     const { error: messageInsertionError } = await supabase
       .from("Messages")
@@ -199,11 +228,16 @@ export async function sendSnippetEmail({
       });
 
     if (messageInsertionError) {
+      console.log("Error inserting message into database:", messageInsertionError);
       throw new Error("Failed to Insert into Database");
     }
 
+    console.log("Message inserted into database successfully.");
+
     return { message: "Successfully Sent!" };
   } catch (err) {
+    console.log("Error:", err);
     return { message: "Internal Server Error" };
   }
 }
+
