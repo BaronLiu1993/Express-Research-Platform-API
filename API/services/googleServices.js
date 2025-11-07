@@ -92,21 +92,20 @@ export async function makeReplyBody({
   inReplyToMessageId,
   attachments = [],
 }) {
-  const formattedFrom = name ? `"${name}" <${from}>` : from;
-
+  const formattedFrom = name ? `${name} <${from}>` : from;
   const headers = {};
 
   if (inReplyToMessageId) {
     headers["In-Reply-To"] = inReplyToMessageId;
     headers["References"] = inReplyToMessageId;
   }
+  const replySubject = `Re: ${subject}`;
 
   const mail = new MailComposer({
     to,
     from: formattedFrom,
-    subject,
+    subject: replySubject,
     html,
-    text: "",
     attachments,
     headers,
   });
@@ -126,6 +125,7 @@ export async function makeReplyBody({
   });
 }
 
+
 export async function makeBody({
   to,
   from,
@@ -134,7 +134,7 @@ export async function makeBody({
   html,
   attachments = [],
 }) {
-  const formattedFrom = name ? `"${name}" <${from}>` : from;
+  const formattedFrom = name ? `${name} <${from}>` : from;
   const textFallback = html.replace(/<[^>]*>/g, "");
   const mail = new MailComposer({
     to,

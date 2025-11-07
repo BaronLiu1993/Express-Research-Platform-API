@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import Mustache from "mustache";
-import { makeBody } from "../services/googleServices.js";
+import { makeBody, makeReplyBody } from "../services/googleServices.js";
 import { createClient } from "@supabase/supabase-js";
 import { configureOAuth } from "../services/googleServices.js";
 import { simpleParser } from "mailparser";
@@ -134,7 +134,6 @@ export async function sendSnippetEmail({
       id: draftData.draft_id,
     });
 
-    const payload = draft.data.message.payload;
     let base64UrlData = draft.data.message.payload.parts[1].body.data;
     const headers = draft.data.message.payload.headers;
     const subject = headers.find((header) => header.name === "Subject");
@@ -205,5 +204,76 @@ export async function sendSnippetEmail({
     return { message: "Successfully Sent!" };
   } catch (err) {
     return { message: "Internal Server Error" };
+  }
+}
+
+export async function sendReply({
+  userId,
+  userEmail,
+  userName,
+  professorEmail,
+  professorName,
+  body,
+  subject,
+  accessToken,
+  messageId,
+  threadId
+}) {
+  try {
+    const trackingId = uuidv4();
+
+  
+
+    // Initialize Supabase client
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    });
+
+    // Configure Gmail OAuth
+    const gmail = await configureOAuth({ userId, supabase });
+
+    // Prepare the reply body
+    const raw = await makeReplyBody({
+      to: professorEmail,
+      from: userEmail,
+      name: userName,
+      subject, 
+      html: body,
+      inReplyToMessageId: messageId,
+    });
+
+    // Send the reply email
+    const sendResponse = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: {
+        raw: raw,
+        threadId: threadId
+      },
+    });
+
+    // Insert message data into Supabase
+    const { error: messageInsertionError } = await supabase
+      .from("Messages")
+      .insert({
+        user_id: userId,
+        thread_id: threadId,
+        message_id: messageId,
+        tracking_id: trackingId, 
+        subject: subject,
+        type: "reply",
+        name: professorName,
+        email: professorEmail,
+        identifier_id: sendResponse.data.id,
+      });
+
+    if (messageInsertionError) {
+      throw new Error("Failed to Insert into Database");
+    }
+
+    return { message: "Successfully Sent!", success: true };
+  } catch (error) {
+    return { message: "Internal Server Error", success: false };
   }
 }

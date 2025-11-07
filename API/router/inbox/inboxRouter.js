@@ -38,7 +38,7 @@ router.get("/get-threads", verifyToken, async (req, res) => {
 });
 
 router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
-  const { threadId, professorName, professorEmail } = req.query;
+  const { threadId } = req.query;
   const userId = req.user.sub;
   try {
     const gmail = await configureOAuth({
@@ -82,6 +82,7 @@ router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
           return {
             id: m.id,
             to: to.value || null,
+            threadId: threadId,
             date: date.value,
             from: from.value || null,
             subject: subject.value || "(No Subject)",
@@ -95,7 +96,7 @@ router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
 
     return res.status(200).json({ messageArray });
   } catch (err) {
-    console.log(err)
+    console.log(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });

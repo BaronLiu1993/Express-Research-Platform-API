@@ -4,17 +4,17 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { rateLimit } from "express-rate-limit";
-import "./queue/send/sendWorker.js"
-import "./queue/draft/draftWorker.js"
+import "./queue/send/sendWorker.js";
+import "./queue/draft/draftWorker.js";
 
 import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";
 import savedRouter from "./router/saved/savedRouter.js";
-import snippetRouter from "./router/snippet/snippetRouter.js"
-import sendRouter from "./router/send/sendRouter.js"
-import inboxRouter from "./router/inbox/inboxRouter.js"
-import engagementRouter from "./router/engagement/engagementRouter.js"
-
+import snippetRouter from "./router/snippet/snippetRouter.js";
+import sendRouter from "./router/send/sendRouter.js";
+import inboxRouter from "./router/inbox/inboxRouter.js";
+import engagementRouter from "./router/engagement/engagementRouter.js";
+import replyRouter from "./router/reply/replyRouter.js";
 
 dotenv.config();
 const app = express();
@@ -58,7 +58,8 @@ app.use("/saved", savedRouter);
 app.use("/snippets", snippetRouter);
 app.use("/email", sendRouter);
 app.use("/inbox", inboxRouter);
-app.use("/engagement", engagementRouter)
+app.use("/engagement", engagementRouter);
+app.use("/reply", replyRouter);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server Started`);
