@@ -34,6 +34,7 @@ router.post("/create-draft", verifyToken, async (req, res) => {
 
 router.post("/send-draft", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData } = req.body;
+  console.log(professorData);
   const userId = req.user.sub;
   try {
     const jobs = professorData.map((professor) => ({
@@ -47,6 +48,7 @@ router.post("/send-draft", verifyToken, async (req, res) => {
           professorId: professor.professor_id,
           professorEmail: professor.email,
           professorName: professor.name,
+          id: professor.id,
         },
       },
     }));

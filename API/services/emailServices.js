@@ -116,12 +116,11 @@ export async function sendSnippetEmail({
 
   try {
     const gmail = await configureOAuth({ userId, supabase });
+
     const { data: draftData, error: draftFetchError } = await supabase
       .from("Emails")
       .select("draft_id, tracking_id")
-      .eq("user_id", userId)
-      .eq("professor_id", body.professorId)
-      .eq("type", "draft")
+      .eq("id", body.id)
       .single();
 
     if (draftFetchError) {
@@ -129,12 +128,14 @@ export async function sendSnippetEmail({
     }
 
     const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+
     const draft = await gmail.users.drafts.get({
       userId: "me",
       id: draftData.draft_id,
     });
 
     let base64UrlData = draft.data.message.payload.parts[1].body.data;
+
     const headers = draft.data.message.payload.headers;
     const subject = headers.find((header) => header.name === "Subject");
     const parentMessageIdHeader = headers.find(
@@ -153,6 +154,7 @@ export async function sendSnippetEmail({
     const buffer = Buffer.from(base64Data, "base64");
     const parsedData = await simpleParser(buffer);
     const htmlBody = parsedData.headerLines[0].line;
+
     const finalHtmlBody = htmlBody + trackingPixel;
 
     const raw = await makeBody({
@@ -217,12 +219,10 @@ export async function sendReply({
   subject,
   accessToken,
   messageId,
-  threadId
+  threadId,
 }) {
   try {
     const trackingId = uuidv4();
-
-  
 
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -231,36 +231,32 @@ export async function sendReply({
       },
     });
 
-    // Configure Gmail OAuth
     const gmail = await configureOAuth({ userId, supabase });
 
-    // Prepare the reply body
     const raw = await makeReplyBody({
       to: professorEmail,
       from: userEmail,
       name: userName,
-      subject, 
+      subject,
       html: body,
       inReplyToMessageId: messageId,
     });
 
-    // Send the reply email
     const sendResponse = await gmail.users.messages.send({
       userId: "me",
       requestBody: {
         raw: raw,
-        threadId: threadId
+        threadId: threadId,
       },
     });
 
-    // Insert message data into Supabase
     const { error: messageInsertionError } = await supabase
       .from("Messages")
       .insert({
         user_id: userId,
         thread_id: threadId,
         message_id: messageId,
-        tracking_id: trackingId, 
+        tracking_id: trackingId,
         subject: subject,
         type: "reply",
         name: professorName,
