@@ -12,30 +12,46 @@ const router = express.Router();
 
 router.get("/get-threads", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  const page = Number(req.query.page) || 1;   
+  const limit = 10;
+  const offset = (page - 1) * limit;          
   try {
-    const { data: threadData, error: threadDataFetchError } =
-      await req.supabaseClient
-        .from("Messages")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("type", "first");
+    const { data, error } = await req.supabaseClient
+      .from("Messages")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", "first")
+      .order("sent_at", { ascending: false }) 
+      .order("id", { ascending: false })       
+      .range(offset, offset + limit - 1);      
 
-    if (threadDataFetchError) {
-      return res
-        .status(400)
-        .json({ message: "Failed to Fetch Data", success: false });
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to fetch messages",
+      });
     }
+
+    const { count } = await req.supabaseClient
+      .from("Messages")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("type", "first");
+
     return res.status(200).json({
-      message: "Got Thread Successfully",
       success: true,
-      data: threadData,
+      data,
+      page,
+      totalPages: Math.ceil(count / limit),
+      totalCount: count,
     });
-  } catch {
+  } catch (e) {
     return res
       .status(500)
-      .json({ message: "Internal Server Error", success: false });
+      .json({ success: false, message: "Internal Server Error" });
   }
 });
+
 
 router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
   const { threadId } = req.query;
