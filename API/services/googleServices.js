@@ -3,6 +3,8 @@ import { decryptToken } from "../services/authServices.js";
 import { encryptToken } from "../services/authServices.js";
 import { google } from "googleapis";
 
+const BACKEND_API_BASE = process.env.BACKEND_API_BASE;
+
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
@@ -27,16 +29,12 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
       .eq("user_id", userId)
       .single();
 
-    
-
     if (tokenError || !tokenData) {
       throw new Error("No tokens found for user");
     }
 
     const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
     const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
-
-   
 
     if (!decryptedRefreshToken) {
       throw new Error("No valid refresh token");
@@ -56,7 +54,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
       .update({ gmail_auth_token: encryptedAccessToken })
       .eq("user_id", userId);
 
-
     if (tokenInsertionError) {
       throw new Error("Failed to Insert Token");
     }
@@ -74,7 +71,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
   }
 }
 
-
 export async function getDriveFileBuffer(fileId, drive) {
   const res = await drive.files.get(
     { fileId, alt: "media" },
@@ -90,10 +86,13 @@ export async function makeReplyBody({
   subject,
   html,
   inReplyToMessageId,
+  trackingId,
   attachments = [],
 }) {
   const formattedFrom = name ? `${name} <${from}>` : from;
   const headers = {};
+  const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${trackingId}" width="1" height="1" style="display:none;" />`;
+  const formattedHtml = html + trackingPixel;
 
   if (inReplyToMessageId) {
     headers["In-Reply-To"] = inReplyToMessageId;
@@ -105,7 +104,7 @@ export async function makeReplyBody({
     to,
     from: formattedFrom,
     subject: replySubject,
-    html,
+    html: formattedHtml,
     attachments,
     headers,
   });
@@ -124,7 +123,6 @@ export async function makeReplyBody({
     });
   });
 }
-
 
 export async function makeBody({
   to,

@@ -224,7 +224,6 @@ export async function sendReply({
   try {
     const trackingId = uuidv4();
 
-    // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -240,6 +239,7 @@ export async function sendReply({
       subject,
       html: body,
       inReplyToMessageId: messageId,
+      trackingId: trackingId,
     });
 
     const sendResponse = await gmail.users.messages.send({
