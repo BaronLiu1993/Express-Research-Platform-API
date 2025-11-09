@@ -79,50 +79,7 @@ export async function getDriveFileBuffer(fileId, drive) {
   return Buffer.from(res.data);
 }
 
-export async function makeReplyBody({
-  to,
-  from,
-  name,
-  subject,
-  html,
-  inReplyToMessageId,
-  trackingId,
-  attachments = [],
-}) {
-  const formattedFrom = name ? `${name} <${from}>` : from;
-  const headers = {};
-  const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${trackingId}" width="1" height="1" style="display:none;" />`;
-  const formattedHtml = html + trackingPixel;
 
-  if (inReplyToMessageId) {
-    headers["In-Reply-To"] = inReplyToMessageId;
-    headers["References"] = inReplyToMessageId;
-  }
-  const replySubject = `Re: ${subject}`;
-
-  const mail = new MailComposer({
-    to,
-    from: formattedFrom,
-    subject: replySubject,
-    html: formattedHtml,
-    attachments,
-    headers,
-  });
-
-  return new Promise((resolve, reject) => {
-    mail.compile().build((err, message) => {
-      if (err) return reject(err);
-
-      const encodedMessage = message
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
-
-      resolve(encodedMessage);
-    });
-  });
-}
 
 export async function makeBody({
   to,
@@ -148,6 +105,50 @@ export async function makeBody({
       if (err) {
         return reject(err);
       }
+
+      const encodedMessage = message
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      resolve(encodedMessage);
+    });
+  });
+}
+
+export async function makeReplyBody({
+  to,
+  from,
+  name,
+  subject,
+  html,
+  inReplyToMessageId,
+  trackingId,
+  attachments = [],
+}) {
+  const formattedFrom = name ? `${name} <${from}>` : from;
+  const headers = {};
+  const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${trackingId}" width="1" height="1" style="display:none;" />`;
+  const formattedHtml = html + trackingPixel;
+
+  if (inReplyToMessageId) {
+    headers["In-Reply-To"] = inReplyToMessageId;
+    headers["References"] = inReplyToMessageId;
+  }
+
+  const replySubject = `Re: ${subject}`;
+  const mail = new MailComposer({
+    to,
+    from: formattedFrom,
+    subject: replySubject,
+    html: formattedHtml,
+    headers,
+  });
+
+  return new Promise((resolve, reject) => {
+    mail.compile().build((err, message) => {
+      if (err) return reject(err);
 
       const encodedMessage = message
         .toString("base64")

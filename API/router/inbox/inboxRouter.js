@@ -12,18 +12,18 @@ const router = express.Router();
 
 router.get("/get-threads", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const page = Number(req.query.page) || 1;   
+  const page = Number(req.query.page) || 1;
   const limit = 10;
-  const offset = (page - 1) * limit;          
+  const offset = (page - 1) * limit;
   try {
     const { data, error } = await req.supabaseClient
       .from("Messages")
       .select("*")
       .eq("user_id", userId)
       .eq("type", "first")
-      .order("sent_at", { ascending: false }) 
-      .order("id", { ascending: false })       
-      .range(offset, offset + limit - 1);      
+      .order("sent_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) {
       return res.status(400).json({
@@ -52,63 +52,114 @@ router.get("/get-threads", verifyToken, async (req, res) => {
   }
 });
 
-
 router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
   const { threadId } = req.query;
   const userId = req.user.sub;
+  const getHeader = (headers = [], name) =>
+    headers.find((h) => (h.name || "").toLowerCase() === name.toLowerCase())
+      ?.value || null;
+
+  const decodeBase64Url = (s) => {
+    if (typeof s !== "string") return null;
+    try {
+      const base64 = s.replace(/-/g, "+").replace(/_/g, "/");
+      return Buffer.from(base64, "base64").toString("utf8");
+    } catch {
+      return null;
+    }
+  };
+
+  const extractBodyData = (payload) => {
+    if (!payload) return { mimeType: null, data: null };
+
+    if (payload.body?.data) {
+      return { mimeType: payload.mimeType || null, data: payload.body.data };
+    }
+
+    const parts = Array.isArray(payload.parts) ? payload.parts : [];
+    if (parts.length === 0) return { mimeType: null, data: null };
+
+    let candidate =
+      parts.find((p) => p.mimeType === "text/html" && p.body?.data) ||
+      parts.find((p) => p.mimeType === "text/plain" && p.body?.data) ||
+      parts.find((p) => p.body?.data);
+
+    if (!candidate) {
+      for (const p of parts) {
+        const inner = extractBodyData(p);
+        if (inner?.data) return inner;
+      }
+      return { mimeType: null, data: null };
+    }
+
+    return {
+      mimeType: candidate.mimeType || null,
+      data: candidate.body.data || null,
+    };
+  };
+
   try {
     const gmail = await configureOAuth({
       userId,
       supabase: req.supabaseClient,
     });
+
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
     });
 
     const messages = threadData?.data?.messages || [];
+
     const { data: seenRows } = await req.supabaseClient
       .from("Messages")
       .select("opened_email, opened_email_at, identifier_id")
       .eq("thread_id", threadId);
+
     const seenMap = new Map((seenRows || []).map((r) => [r.identifier_id, r]));
-    const messageArray = await Promise.all(
-      messages.map(async (m) => {
-        let base64UrlData = m.payload.parts[1].body.data;
-        if (Buffer.isBuffer(base64UrlData)) {
-          base64UrlData = base64UrlData.toString("utf8");
-        }
 
-        const headers = m.payload.headers;
-        const parentMessageIdHeader = headers.find(
-          (h) => h.name.toLowerCase() === "message-id"
-        ).value;
-        const subject = headers.find((header) => header.name === "Subject");
-        const to = headers.find((header) => header.name === "To");
-        const from = headers.find((header) => header.name === "From");
-        const date = headers.find((header) => header.name === "Date");
+    const messageArray = (
+      await Promise.all(
+        messages.map(async (m) => {
+          const headers = m?.payload?.headers || [];
 
-        if (typeof base64UrlData === "string") {
-          const base64Data = base64UrlData
-            .replace(/-/g, "+")
-            .replace(/_/g, "/");
-          const buffer = Buffer.from(base64Data, "base64");
-          const parsed = await simpleParser(buffer);
+          const messageIdHeader = getHeader(headers, "Message-ID");
+          const subject = getHeader(headers, "Subject") || "(No Subject)";
+          const to = getHeader(headers, "To");
+          const from = getHeader(headers, "From");
+          const date = getHeader(headers, "Date");
+
+          const { data: base64UrlData } = extractBodyData(m?.payload);
+
+          let bodyStr = null;
+          if (Buffer.isBuffer(base64UrlData)) {
+            bodyStr = base64UrlData.toString("utf8");
+          } else {
+            bodyStr = decodeBase64Url(base64UrlData);
+          }
+
+          let parsedBody = bodyStr || "";
+          if (bodyStr) {
+            const parsed = await simpleParser(Buffer.from(bodyStr, "utf8"));
+            parsedBody = parsed.html || parsed.text || bodyStr || "";
+          }
+
           const seenData = seenMap.get(m.id) || null;
+
           return {
             id: m.id,
-            to: to.value || null,
-            threadId: threadId,
-            date: date.value,
-            from: from.value || null,
-            subject: subject.value || "(No Subject)",
-            body: parsed.headerLines[0].line || "",
-            seenData: seenData || null,
-            messageIdHeader: parentMessageIdHeader || null,
+            threadId,
+            to,
+            from,
+            date,
+            subject,
+            body: parsedBody,
+            seenData,
+            messageIdHeader: messageIdHeader || null,
           };
-        }
-      })
-    );
+        })
+      )
+    ).filter(Boolean);
 
     return res.status(200).json({ messageArray });
   } catch (err) {
