@@ -1,13 +1,13 @@
 import { Worker } from "bullmq";
-import { generateDraftFromSnippetEmail } from "../../services/emailServices.js";
+import { generateDraftEmail } from "../../services/emailServices.js";
 import { Connection } from "../../redis/redis.js";
 
 export const draftWorker = new Worker(
-  "generate-draft",
+  "generate-variableless-draft",
   async (job) => {
     const { userId, professorId, body, accessToken } = job.data;
     try {
-      const result = await generateDraftFromSnippetEmail({
+      const result = await generateDraftEmail({
         userId,
         professorId,
         body,
@@ -15,7 +15,6 @@ export const draftWorker = new Worker(
       });
       return result;
     } catch (err) {
-      // Add Telemetry Here
       throw new Error("Failed");
     }
   },

@@ -1,6 +1,7 @@
 import express from "express";
 import draftQueue from "../../queue/draft/draftQueue.js";
 import sendQueue from "../../queue/send/sendQueue.js";
+import variablelessDraftQueue from "../../queue/variablelessDrafts/variablelessQueue.js";
 import { verifyToken } from "../../services/authServices.js";
 import { configureOAuth, makeBody } from "../../services/googleServices.js";
 import { simpleParser } from "mailparser";
@@ -26,6 +27,31 @@ router.post("/create-draft", verifyToken, async (req, res) => {
       },
     }));
     await draftQueue.addBulk(jobs);
+    res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to queue bulk emails" });
+  }
+});
+
+router.post("/create-variableless-draft", verifyToken, async (req, res) => {
+  const { professorData, baseBody } = req.body;
+  const userId = req.user.sub;
+  try {
+    const jobs = professorData.map((professor) => ({
+      name: "generate-variableless-draft",
+      data: {
+        userId,
+        professorId: professor.id,
+        accessToken: req.token,
+        body: {
+          ...baseBody,
+          emailContents: professor.emailContents,
+          to: professor.email,
+          toName: professor.name,
+        },
+      },
+    }));
+    await variablelessDraftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
     res.status(500).json({ message: "Failed to queue bulk emails" });
