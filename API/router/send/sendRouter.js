@@ -34,7 +34,7 @@ router.post("/create-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/create-variableless-draft", verifyToken, async (req, res) => {
-  const { professorData, baseBody } = req.body;
+  const { html, subject, baseBody, professorData } = req.body;
   const userId = req.user.sub;
   try {
     const jobs = professorData.map((professor) => ({
@@ -45,7 +45,8 @@ router.post("/create-variableless-draft", verifyToken, async (req, res) => {
         accessToken: req.token,
         body: {
           ...baseBody,
-          emailContents: professor.emailContents,
+          html: html,
+          subject: subject,
           to: professor.email,
           toName: professor.name,
         },

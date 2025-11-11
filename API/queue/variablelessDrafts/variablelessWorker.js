@@ -5,6 +5,7 @@ import { Connection } from "../../redis/redis.js";
 export const draftWorker = new Worker(
   "generate-variableless-draft",
   async (job) => {
+    
     const { userId, professorId, body, accessToken } = job.data;
     try {
       const result = await generateDraftEmail({
