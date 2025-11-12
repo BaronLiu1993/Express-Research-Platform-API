@@ -13,7 +13,7 @@ router.post("/generate-upload-url", verifyToken, async (req, res) => {
       fileName,
       fileType,
     });
-    return res.status(200).json({ url: presignedURLData });
+    return res.status(200).json({ urlData: presignedURLData });
   } catch (err) {
     console.log(err);
     return res.status(500).json({ message: "Internal Server Error" });
