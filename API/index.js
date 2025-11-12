@@ -16,6 +16,7 @@ import sendRouter from "./router/send/sendRouter.js";
 import inboxRouter from "./router/inbox/inboxRouter.js";
 import engagementRouter from "./router/engagement/engagementRouter.js";
 import replyRouter from "./router/reply/replyRouter.js";
+import storageRouter from "./router/storage/storageRouter.js"
 
 dotenv.config();
 const app = express();
@@ -61,6 +62,7 @@ app.use("/email", sendRouter);
 app.use("/inbox", inboxRouter);
 app.use("/engagement", engagementRouter);
 app.use("/reply", replyRouter);
+app.use("/storage", storageRouter)
 
 app.listen(process.env.PORT, () => {
   console.log(`Server Started`);
