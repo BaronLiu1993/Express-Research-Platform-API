@@ -6,11 +6,16 @@ const router = express.Router();
 
 router.post("/generate-upload-url", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const { filename, fileType } = req.body;
+  const { fileName, fileType } = req.body;
   try {
-    const presignedURL = await generateUploadPresignedURL({ userId, filename, fileType });
-    return res.status(200).json({ url: presignedURL });
-  } catch {
+    const presignedURLData = await generateUploadPresignedURL({
+      userId,
+      fileName,
+      fileType,
+    });
+    return res.status(200).json({ url: presignedURLData });
+  } catch (err) {
+    console.log(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
