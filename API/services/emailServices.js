@@ -98,28 +98,23 @@ export async function generateDraftEmail({
 }) {
   const { to, fromName, fromEmail, toName, html, subject } = body;
 
-  if ( !to || !fromName || !fromEmail || !toName || !html || !subject) {
+  if (!to || !fromName || !fromEmail || !toName || !html || !subject) {
     return { message: "Missing Inputs", completed: false };
   }
-
   const trackingId = uuidv4();
-
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 
   try {
     const gmail = await configureOAuth({ userId, supabase });
+
     const raw = await makeBody({
       to,
       from: fromName,
       name: fromEmail,
-      subject: subject,
-      html: html,
+      subject,
+      html,
     });
 
     const draft = await gmail.users.drafts.create({
@@ -146,10 +141,12 @@ export async function generateDraftEmail({
     }
 
     return { message: "Draft successfully created", completed: true };
+
   } catch (err) {
     return { message: "Failed to create draft", completed: false };
   }
 }
+
 
 export async function sendSnippetEmail({
   userId,
