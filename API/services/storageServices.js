@@ -45,7 +45,6 @@ export async function generateGetPresignedURL({ userId, fileType, fileName }) {
     const { data, error } = await supabase.storage
       .from("userfiles")
       .createSignedUrl(`${userId}/${fileType}/${fileName}`, 60);
-    console.log(error);
     if (error) {
       throw new Error("Failed to Generate URL for File");
     }

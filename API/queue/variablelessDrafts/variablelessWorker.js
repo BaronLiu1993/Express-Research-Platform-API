@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { generateDraftEmail } from "../../services/emailServices.js";
 import { Connection } from "../../redis/redis.js";
 
-export const draftWorker = new Worker(
+export const draftVariablelessWorker = new Worker(
   "generate-variableless-draft",
   async (job) => {
     
@@ -29,18 +29,18 @@ export const draftWorker = new Worker(
   }
 );
 
-draftWorker.on("completed", (job, result) => {
+draftVariablelessWorker.on("completed", (job, result) => {
   // Add Telemetry Here
 });
 
-draftWorker.on("failed", (job, err) => {
+draftVariablelessWorker.on("failed", (job, err) => {
   // Add Telemetry Here
 });
 
-draftWorker.on("stalled", (job, err) => {
+draftVariablelessWorker.on("stalled", (job, err) => {
   // Add Telemetry Here
 });
 
-draftWorker.on("error", (err) => {
+draftVariablelessWorker.on("error", (err) => {
   // Add Telemetry Here
 });

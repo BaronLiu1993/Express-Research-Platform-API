@@ -2,6 +2,7 @@ import express from "express";
 import draftQueue from "../../queue/draft/draftQueue.js";
 import sendQueue from "../../queue/send/sendQueue.js";
 import variablelessDraftQueue from "../../queue/variablelessDrafts/variablelessQueue.js";
+import sendAttachmentsQueue from "../../queue/sendAttachments/sendAttachmentsQueue.js";
 import { verifyToken } from "../../services/authServices.js";
 import { configureOAuth, makeBody } from "../../services/googleServices.js";
 import { simpleParser } from "mailparser";
@@ -89,6 +90,35 @@ router.post("/send-draft", verifyToken, async (req, res) => {
       },
     }));
     await sendQueue.addBulk(jobs);
+    res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
+  } catch {
+    res.status(500).json({ message: "Failed to queue bulk emails" });
+  }
+});
+
+router.post("/send-attachments-draft", verifyToken, async (req, res) => {
+  const { userEmail, userName, professorData } = req.body;
+  if (professorData.length > 5) {
+    res.status(400).json({ message: "Queueing Too Many" });
+  }
+  const userId = req.user.sub;
+  try {
+    const jobs = professorData.map((professor) => ({
+      name: "send-attachments-email",
+      data: {
+        userId,
+        userEmail,
+        userName,
+        accessToken: req.token,
+        body: {
+          professorId: professor.professor_id,
+          professorEmail: professor.email,
+          professorName: professor.name,
+          id: professor.id,
+        },
+      },
+    }));
+    await sendAttachmentsQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch {
     res.status(500).json({ message: "Failed to queue bulk emails" });
