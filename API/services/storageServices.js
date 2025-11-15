@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
 
-// Use Service Side Supabase just for this to bypass RLS once
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
