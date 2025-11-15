@@ -299,7 +299,7 @@ export async function sendSnippetEmailWithAttachments({
       .eq("id", body.id)
       .single();
 
-    const { data: fileData, error: fileError } = await req.supabaseClient
+    const { data: fileData, error: fileError } = await supabase
       .from("User_Profiles")
       .select("resume, transcript")
       .eq("user_id", userId)
