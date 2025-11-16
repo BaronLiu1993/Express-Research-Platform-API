@@ -308,6 +308,20 @@ router.post("/register", verifyToken, async (req, res) => {
   } = req.body;
 
   const userId = req.user.sub;
+  const { data: profileData, error: profileError } = await req.supabaseClient
+    .from("User_Profiles")
+    .select("finished_registration")
+    .eq("user_id", userId)
+    .single();
+  if (profileError) {
+    return res.status(400).json({ message: "Failed To Fetch" });
+  }
+
+  if (profileData.finished_registration) {
+    return res.status(429).json({
+      message: "You can only register.",
+    });
+  }
 
   if (
     !student_major ||
@@ -415,6 +429,80 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.get("/fetch-info", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
+  try {
+    const { data: profile, error: profileError } = await req.supabaseClient
+      .from("User_Profiles")
+      .select("student_interests, student_year, student_name, student_major")
+      .eq("user_id", userId)
+      .single();
+
+    if (profileError) {
+      return res.status(400).json({ message: "Fetch Error" });
+    }
+
+    return res.status(200).json({ profile });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.post("/update-profile", verifyToken, async (req, res) => {
+  const { student_major, student_year, student_interests } = req.body;
+  const userId = req.user.sub;
+
+  const { data: profile, error: profileError } = await req.supabaseClient
+    .from("User_Profiles")
+    .select("updated_profile")
+    .eq("user_id", userId)
+    .single();
+  if (profileError) {
+    return res.status(400).json({ message: "Fetch Error" });
+  }
+
+  if (profile.updated_profile) {
+    const lastUpdate = new Date(profile.updated_profile);
+    const now = new Date();
+    const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+    if (now - lastUpdate < ONE_WEEK) {
+      return res.status(429).json({
+        message: "You can only update your profile once per week.",
+        next_allowed_update: new Date(lastUpdate.getTime() + ONE_WEEK),
+      });
+    }
+  }
+
+  if (!student_major || !student_year || !student_interests || !userId) {
+    return res.status(400).json({ message: "Incomplete Information" });
+  }
+
+  if (student_interests.length > 3 || student_interests.length <= 0) {
+    return res.status(400).json({ message: "Invalid Interests" });
+  }
+
+  try {
+    const research_input_embeddings = student_interests.join();
+    const embeddings = await generateEmbeddings(research_input_embeddings);
+    const { error: profileError } = await req.supabaseClient
+      .from("User_Profiles")
+      .update({
+        student_major: student_major,
+        student_year: student_year,
+        student_interests: student_interests,
+        student_embeddings: embeddings.data[0].embedding,
+      })
+      .eq("user_id", userId);
+
+    if (profileError) {
+      return res.status(400).json({ message: "Failed To Update" });
+    }
+    return res.status(200).json({ message: "Sucessfully Completed Profile" });
+  } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 
