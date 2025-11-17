@@ -460,6 +460,7 @@ router.post("/update-profile", verifyToken, async (req, res) => {
     .select("updated_profile")
     .eq("user_id", userId)
     .single();
+    
   if (profileError) {
     return res.status(400).json({ message: "Fetch Error" });
   }
