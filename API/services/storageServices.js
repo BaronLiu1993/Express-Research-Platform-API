@@ -23,7 +23,9 @@ export async function generateUploadPresignedURL({
 
     const { data, error } = await supabase.storage
       .from("userfiles")
-      .createSignedUploadUrl(filePath);
+      .createSignedUploadUrl(filePath, {
+        upsert: true,
+      });
 
     if (error) {
       throw new Error(`Supabase Storage error`);
@@ -43,7 +45,8 @@ export async function generateGetPresignedURL({ userId, fileType, fileName }) {
 
     const { data, error } = await supabase.storage
       .from("userfiles")
-      .createSignedUrl(`${userId}/${fileType}/${fileName}`, 60);
+      .createSignedUrl(`${userId}/${fileType}/${fileName}.pdf`, 60);
+
     if (error) {
       throw new Error("Failed to Generate URL for File");
     }

@@ -301,17 +301,21 @@ export async function sendSnippetEmailWithAttachments({
 
     const { data: fileData, error: fileError } = await supabase
       .from("User_Profiles")
-      .select("resume, transcript")
+      .select("resume, transcript, resume_path, transcript_path")
       .eq("user_id", userId)
       .single();
 
+    if (fileError) {
+      throw new Error("Failed To Find File.");
+    }
+
     const attachments = [];
 
-    if (fileData.resume) {
+    if (fileData.resume && fileData.resume_path) {
       try {
         const body = await generateGetPresignedURL({
           fileType: "resume",
-          fileName: fileData.resume,
+          fileName: fileData.resume_path,
           userId,
         });
         attachments.push({
@@ -324,13 +328,14 @@ export async function sendSnippetEmailWithAttachments({
       }
     }
 
-    if (fileData.transcript) {
+    if (fileData.transcript && fileData.transcript_path) {
       try {
         const body = await generateGetPresignedURL({
           fileType: "transcript",
-          fileName: fileData.transcript,
+          fileName: fileData.transcript_path,
           userId,
         });
+
         attachments.push({
           filename: fileData.transcript,
           path: body.signedUrl,
