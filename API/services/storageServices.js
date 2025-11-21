@@ -26,6 +26,7 @@ export async function generateUploadPresignedURL({
       .createSignedUploadUrl(filePath, {
         upsert: true,
       });
+    
 
     if (error) {
       throw new Error(`Supabase Storage error`);

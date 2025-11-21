@@ -47,7 +47,7 @@ router.post(
     if (!fileName || !fileType) {
       return res
         .status(400)
-        .json({ message: "Invalid File Name of File Type" });
+        .json({ message: "Invalid File Name or File Type" });
     }
     try {
       const presignedURLData = await generateUploadPresignedURL({
@@ -60,7 +60,7 @@ router.post(
         .from("User_Profiles")
         .update({
           transcript: fileName,
-          transcipt_path: `${userId}-transcript`,
+          transcript_path: `${userId}-transcript`,
         })
         .eq("user_id", userId);
 
