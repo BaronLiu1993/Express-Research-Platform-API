@@ -119,4 +119,8 @@ router.get("/get-file-url", verifyToken, async (req, res) => {
   }
 });
 
+router.delete("/delete-file", verifyToken, async (req, res) => {
+  
+})
+
 export default router;
