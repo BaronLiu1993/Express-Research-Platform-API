@@ -26,7 +26,6 @@ export async function generateUploadPresignedURL({
       .createSignedUploadUrl(filePath, {
         upsert: true,
       });
-    
 
     if (error) {
       throw new Error(`Supabase Storage error`);
@@ -52,6 +51,24 @@ export async function generateGetPresignedURL({ userId, fileType, fileName }) {
       throw new Error("Failed to Generate URL for File");
     }
     return data;
+  } catch {
+    throw new Error("Internal Server Error");
+  }
+}
+
+export async function deleteFile({ userId, fileType, fileName }) {
+  try {
+    if (!userId || !fileType || !fileName) {
+      throw new Error("Missing Parameters");
+    }
+
+    const { error } = await supabase.storage
+      .from("userfiles")
+      .remove([`${userId}/${fileType}/${fileName}.pdf`]);
+
+    if (error) {
+      throw new Error("Failed to Generate URL for File");
+    }
   } catch {
     throw new Error("Internal Server Error");
   }
