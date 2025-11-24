@@ -319,7 +319,7 @@ router.post("/register", verifyToken, async (req, res) => {
 
   if (profileData.finished_registration) {
     return res.status(429).json({
-      message: "You can only register.",
+      message: "You can only register Once.",
     });
   }
 
@@ -451,6 +451,7 @@ router.get("/fetch-info", verifyToken, async (req, res) => {
   }
 });
 
+
 router.post("/update-profile", verifyToken, async (req, res) => {
   const { student_major, student_year, student_interests } = req.body;
   const userId = req.user.sub;
@@ -460,19 +461,24 @@ router.post("/update-profile", verifyToken, async (req, res) => {
     .select("updated_profile")
     .eq("user_id", userId)
     .single();
-    
+
   if (profileError) {
+    console.error(profileError);
     return res.status(400).json({ message: "Fetch Error" });
   }
-
-  if (profile.updated_profile) {
-    const lastUpdate = new Date(profile.updated_profile);
-    const now = new Date();
+  if (profile && profile.updated_profile) {
+    const lastUpdate = new Date(profile.updated_profile); 
+    const now = new Date(); 
     const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
-    if (now - lastUpdate < ONE_WEEK) {
+
+    const diffMs = now - lastUpdate; 
+
+    if (diffMs < ONE_WEEK) {
+      const nextAllowedUpdate = new Date(lastUpdate.getTime() + ONE_WEEK);
+
       return res.status(429).json({
         message: "You can only update your profile once per week.",
-        next_allowed_update: new Date(lastUpdate.getTime() + ONE_WEEK),
+        next_allowed_update: nextAllowedUpdate, 
       });
     }
   }
@@ -487,24 +493,31 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 
   try {
     const research_input_embeddings = student_interests.join();
+
     const embeddings = await generateEmbeddings(research_input_embeddings);
-    const { error: profileError } = await req.supabaseClient
+
+    const { error: updateError } = await req.supabaseClient
       .from("User_Profiles")
       .update({
-        student_major: student_major,
-        student_year: student_year,
-        student_interests: student_interests,
+        student_major,
+        student_year,
+        student_interests,
         student_embeddings: embeddings.data[0].embedding,
+        updated_profile: new Date().toISOString(), 
       })
       .eq("user_id", userId);
 
-    if (profileError) {
+    if (updateError) {
+      console.error(updateError);
       return res.status(400).json({ message: "Failed To Update" });
     }
-    return res.status(200).json({ message: "Sucessfully Completed Profile" });
+
+    return res.status(200).json({ message: "Successfully Completed Profile" });
   } catch (err) {
+    console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 export default router;

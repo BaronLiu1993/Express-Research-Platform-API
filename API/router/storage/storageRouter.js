@@ -106,8 +106,6 @@ router.get("/check-file-existance", verifyToken, async (req, res) => {
 router.get("/get-file-url", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   const { fileType, fileName } = req.query;
-  console.log(fileType);
-  console.log(fileName);
   try {
     const presignedURLData = await generateGetPresignedURL({
       userId,
@@ -150,7 +148,6 @@ router.delete(
 
       return res.status(200).json({ message: "Deleted Resources" });
     } catch (err) {
-      console.log(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
@@ -185,7 +182,6 @@ router.delete(
 
       return res.status(200).json({ message: "Deleted Resources" });
     } catch (err) {
-      console.log(err);
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
