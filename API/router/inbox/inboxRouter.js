@@ -90,12 +90,16 @@ router.get("/get-email", verifyToken, async (req, res) => {
     const message = await gmail.users.messages.get({
       userId: "me",
       id: messageId,
-      format: "full",
+      format: "raw",
     });
 
-    return res.status(200).json({ data: message });
+    const rawBuffer = Buffer.from(message.data.raw, "base64url");
+    const parsed = await simpleParser(rawBuffer);
+    const html = parsed.html || null; 
+    const text = parsed.text || null;
+
+    return res.status(200).json({ html, text });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
