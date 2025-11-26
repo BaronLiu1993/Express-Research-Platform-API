@@ -89,6 +89,10 @@ export async function makeBody({
   html,
   attachments = [],
 }) {
+
+  //Check if the body is being created correctly
+  console.log(name)
+  console.log(from)
   const formattedFrom = name ? `${name} <${from}>` : from;
   const textFallback = html.replace(/<[^>]*>/g, "");
   const mail = new MailComposer({

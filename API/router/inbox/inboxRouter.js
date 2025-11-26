@@ -52,6 +52,54 @@ router.get("/get-threads", verifyToken, async (req, res) => {
   }
 });
 
+router.get("/get-email-previews", verifyToken, async (req, res) => {
+  const { threadId } = req.query;
+  const userId = req.user.sub;
+  // Only get the first 5 and then infinite load down if needed
+  //Get the entire email preview, but each has the messageId to get the draft
+  try {
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
+    const threadData = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+      format: "metadata",
+      metadataHeaders: ["From", "Subject", "Date"],
+    });
+
+    const messages = threadData.data.messages || [];
+
+    return res.status(200).json({ messages });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.get("/get-email", verifyToken, async (req, res) => {
+  const { messageId } = req.query;
+  const userId = req.user.sub;
+
+  try {
+    const gmail = await configureOAuth({
+      userId,
+      supabase: req.supabaseClient,
+    });
+
+    const message = await gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+      format: "full",
+    });
+
+    return res.status(200).json({ data: message });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
   const { threadId } = req.query;
   const userId = req.user.sub;
@@ -115,8 +163,6 @@ router.get("/get-emails-in-thread", verifyToken, async (req, res) => {
       .from("Messages")
       .select("opened_email, opened_email_at, identifier_id")
       .eq("thread_id", threadId);
-
-    const seenMap = new Map((seenRows || []).map((r) => [r.identifier_id, r]));
 
     const messageArray = (
       await Promise.all(
