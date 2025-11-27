@@ -216,8 +216,8 @@ export async function sendSnippetEmail({
 
     const raw = await makeBody({
       to: body.professorEmail,
-      from: userName,
-      name: userEmail,
+      from: userEmail,
+      name: userName,
       subject,
       html: finalHtmlBody,
     });
@@ -382,8 +382,8 @@ export async function sendSnippetEmailWithAttachments({
 
     const raw = await makeBody({
       to: body.professorEmail,
-      from: userName,
-      name: userEmail,
+      from: userEmail,
+      name: userName,
       subject,
       html: finalHtmlBody,
       attachments: attachments,
