@@ -68,7 +68,6 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
       metadataHeaders: ["From", "Subject", "Date"],
     });
 
-
     const messages = threadData.data.messages || [];
 
     return res.status(200).json({ messages });
@@ -77,10 +76,8 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
   }
 });
 
-
-
 router.get("/get-email", verifyToken, async (req, res) => {
-  const { messageId } = req.query;
+  const { messageId, fromUser } = req.query;
   const userId = req.user.sub;
 
   try {
@@ -100,19 +97,21 @@ router.get("/get-email", verifyToken, async (req, res) => {
     const html = parsed.html || null;
     const text = parsed.text || null;
 
-    const { data: seenData, error: seenFetchError } = await req.supabaseClient
-      .from("Messages")
-      .select("opened_email, opened_email_at")
-      .eq("identifier_id", messageId)
-      .single();
+    if (fromUser == "true") {
+      const { data: seenData, error: seenFetchError } = await req.supabaseClient
+        .from("Messages")
+        .select("opened_email, opened_email_at")
+        .eq("identifier_id", messageId)
+        .single();
+      if (seenFetchError) {
+        return res.status(400).json({
+          message: "Failed to fetch messages",
+        });
+      }
 
-    if (seenFetchError) {
-      return res.status(400).json({
-        message: "Failed to fetch messages",
-      });
+      return res.status(200).json({ html, text, seenData });
     }
-
-    return res.status(200).json({ html, text, seenData });
+    return res.status(200).json({ html, text });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
   }
