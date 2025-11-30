@@ -60,12 +60,14 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
       userId,
       supabase: req.supabaseClient,
     });
+
     const threadData = await gmail.users.threads.get({
       userId: "me",
       id: threadId,
       format: "metadata",
       metadataHeaders: ["From", "Subject", "Date"],
     });
+
 
     const messages = threadData.data.messages || [];
 
@@ -74,6 +76,8 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+
 
 router.get("/get-email", verifyToken, async (req, res) => {
   const { messageId } = req.query;
@@ -102,7 +106,6 @@ router.get("/get-email", verifyToken, async (req, res) => {
       .eq("identifier_id", messageId)
       .single();
 
-    
     if (seenFetchError) {
       return res.status(400).json({
         message: "Failed to fetch messages",

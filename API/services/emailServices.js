@@ -13,6 +13,13 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const BACKEND_API_BASE = process.env.BACKEND_API_BASE;
 
+async function getHeader(headers = [], name) {
+  return (
+    headers.find((h) => (h.name || "").toLowerCase() === name.toLowerCase())
+      ?.value || null
+  );
+}
+
 export async function generateDraftFromSnippetEmail({
   userId,
   professorId,
@@ -448,24 +455,35 @@ export async function sendReply({
   try {
     const trackingId = uuidv4();
 
+    // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: `Bearer ${accessToken}` },
       },
     });
 
-    const gmail = await configureOAuth({ userId, supabase });
 
+    // Configure Gmail OAuth
+    const gmail = await configureOAuth({ userId, supabase });
+    const message = await gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+      format: "full",
+    });
+  
+    const replyId = await getHeader(message.data.payload.headers, 'Message-Id')
+  
     const raw = await makeReplyBody({
       to: professorEmail,
       from: userEmail,
       name: userName,
       subject,
       html: body,
-      inReplyToMessageId: messageId,
+      inReplyToMessageId: replyId,
       trackingId: trackingId,
     });
 
+    // Send email via Gmail API
     const sendResponse = await gmail.users.messages.send({
       userId: "me",
       requestBody: {
@@ -474,6 +492,7 @@ export async function sendReply({
       },
     });
 
+    // Insert message into Supabase
     const { error: messageInsertionError } = await supabase
       .from("Messages")
       .insert({
@@ -492,11 +511,13 @@ export async function sendReply({
       throw new Error("Failed to Insert into Database");
     }
 
+
     return { message: "Successfully Sent!", success: true };
   } catch (error) {
     return { message: "Internal Server Error", success: false };
   }
 }
+
 
 export async function sendEmailWithAttachments({
   userId,
