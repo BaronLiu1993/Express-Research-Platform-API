@@ -1,6 +1,5 @@
 import express from "express";
 
-//External Library Imports
 import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
 import { simpleParser } from "mailparser";
@@ -38,6 +37,7 @@ router.get("/get-threads", verifyToken, async (req, res) => {
       .eq("user_id", userId)
       .eq("type", "first");
 
+
     return res.status(200).json({
       success: true,
       data,
@@ -69,6 +69,7 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
     });
 
     const messages = threadData.data.messages || [];
+
 
     return res.status(200).json({ messages });
   } catch {
