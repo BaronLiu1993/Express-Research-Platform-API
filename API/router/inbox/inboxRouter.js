@@ -9,6 +9,19 @@ dotenv.config();
 
 const router = express.Router();
 
+router.post("/gmail/push", async (req, res) => {
+  const msg = req.body.message;
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(msg.data, "base64").toString()
+    )
+    const { emailAddress, historyId} = decoded; // Might have to store the hisoryId
+    
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error"})
+  }
+})
+
 router.get("/get-threads", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   const page = Number(req.query.page) || 1;
