@@ -6,6 +6,7 @@ import {
 } from "../../services/authServices.js";
 import { encryptToken } from "../../services/authServices.js";
 import dotenv from "dotenv";
+import { configureOAuth } from "../../services/googleServices.js";
 
 dotenv.config();
 
@@ -451,7 +452,6 @@ router.get("/fetch-info", verifyToken, async (req, res) => {
   }
 });
 
-
 router.post("/update-profile", verifyToken, async (req, res) => {
   const { student_major, student_year, student_interests } = req.body;
   const userId = req.user.sub;
@@ -463,22 +463,21 @@ router.post("/update-profile", verifyToken, async (req, res) => {
     .single();
 
   if (profileError) {
-    console.error(profileError);
     return res.status(400).json({ message: "Fetch Error" });
   }
   if (profile && profile.updated_profile) {
-    const lastUpdate = new Date(profile.updated_profile); 
-    const now = new Date(); 
+    const lastUpdate = new Date(profile.updated_profile);
+    const now = new Date();
     const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
 
-    const diffMs = now - lastUpdate; 
+    const diffMs = now - lastUpdate;
 
     if (diffMs < ONE_WEEK) {
       const nextAllowedUpdate = new Date(lastUpdate.getTime() + ONE_WEEK);
 
       return res.status(429).json({
         message: "You can only update your profile once per week.",
-        next_allowed_update: nextAllowedUpdate, 
+        next_allowed_update: nextAllowedUpdate,
       });
     }
   }
@@ -503,12 +502,11 @@ router.post("/update-profile", verifyToken, async (req, res) => {
         student_year,
         student_interests,
         student_embeddings: embeddings.data[0].embedding,
-        updated_profile: new Date().toISOString(), 
+        updated_profile: new Date().toISOString(),
       })
       .eq("user_id", userId);
 
     if (updateError) {
-      console.error(updateError);
       return res.status(400).json({ message: "Failed To Update" });
     }
 
@@ -519,5 +517,20 @@ router.post("/update-profile", verifyToken, async (req, res) => {
   }
 });
 
+router.post("/register/watch", verifyToken, async (req, res) => {
+  const userId = req.user.sub;
+  try {
+    const gmail = await configureOAuth({ userId, supabase });
+    await gmail.users.watch({
+      userId: "me",
+      requestBody: {
+        topicName: "projects/uoftresearch/topics/research-gmail-topic", // Try eevrything for now and then switch
+      },
+    });
+    return res.status(200).json({ message: "Registered Successfully" });
+  } catch {
+    return res.status(500).json({ message: "internal server error" });
+  }
+});
 
 export default router;

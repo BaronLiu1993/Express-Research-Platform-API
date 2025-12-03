@@ -9,18 +9,17 @@ dotenv.config();
 
 const router = express.Router();
 
-router.post("/gmail/push", async (req, res) => {
-  const msg = req.body.message;
+router.post("/mail-webhook", async (req, res) => {
+  const message = req.body.message;
+
   try {
-    const decoded = JSON.parse(
-      Buffer.from(msg.data, "base64").toString()
-    )
-    const { emailAddress, historyId} = decoded; // Might have to store the hisoryId
-    
+    const data = JSON.parse(Buffer.from(message.data, "base64").toString());
+    console.log(data);
+    return res.status(200).json({ message: "retrieved data" });
   } catch {
-    return res.status(500).json({ message: "Internal Server Error"})
+    return res.status(500).json({ message: "internal server error" });
   }
-})
+});
 
 router.get("/get-threads", verifyToken, async (req, res) => {
   const userId = req.user.sub;
