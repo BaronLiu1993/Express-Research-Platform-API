@@ -83,10 +83,9 @@ async function updateInbox({ historyId, userId }) {
 // Add authentication to make sure it is the right person getting this data
 router.post("/mail-webhook", async (req, res) => {
   const message = req.body.message;
-
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    console.log(data);
+    //gconsole.log(data);
     return res.status(200).json({ message: "retrieved data" });
   } catch {
     return res.status(500).json({ message: "internal server error" });
