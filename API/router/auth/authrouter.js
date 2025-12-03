@@ -520,15 +520,18 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 router.post("/register/watch", verifyToken, async (req, res) => {
   const userId = req.user.sub;
   try {
+    const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
-    await gmail.users.watch({
+    const status = await gmail.users.watch({
       userId: "me",
       requestBody: {
         topicName: "projects/uoftresearch/topics/research-gmail-topic", // Try eevrything for now and then switch
+        labelIds: []
       },
     });
+
     return res.status(200).json({ message: "Registered Successfully" });
-  } catch {
+  } catch (err) {
     return res.status(500).json({ message: "internal server error" });
   }
 });

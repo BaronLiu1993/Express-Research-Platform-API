@@ -9,6 +9,78 @@ dotenv.config();
 
 const router = express.Router();
 
+async function getHeader({ body, title }) {
+  try {
+    const headerVal = body.find((obj) => obj.name == title).val;
+    return headerVal;
+  } catch {
+    throw new Error("Internal Server Error");
+  }
+}
+
+async function updateThreadInfo({ userId, gmail, threadId }) {
+  try {
+    const thread = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+    });
+
+    const messages = thread.data.messages;
+    const lastMessage = messages[messages.length - 1];
+
+    const lastUpdatedAt = new Date(
+      parseInt(lastMessage.internalDate)
+    ).toISOString();
+
+    const { error: upsertError } = await supabaseClient
+      .from("Messages")
+      .upsert({
+        sent_at: lastUpdatedAt,
+        unread: false,
+      })
+      .eq("thread_id", threadId);
+    if (upsertError) {
+      throw new Error("Failed to Upsert.");
+    }
+  } catch {
+    throw new Error("Internal Server Error");
+  }
+}
+
+async function updateInbox({ historyId, userId }) {
+  try {
+    const history = await gmail.users.history.list({
+      userId: "me",
+      startHistoryId: historyId,
+    });
+
+    // Update the next
+    for (const item of history.data) {
+      const msgId = item;
+      for (const added of item.messagesAdded) {
+        const message = await gmail.users.messages.get({
+          userId: "me",
+          id: msgId,
+        });
+        const threadId = message.data.threadId;
+        await updateThreadInfo({ threadId, userId, gmail });
+      }
+    }
+
+    // Update next
+    const { error: historyUpdateError } = await supabaseClient
+      .from("User_Profile")
+      .update({ historyId })
+      .eq("user_id", userId);
+    if (historyUpdateError) {
+      throw new Error("Failed To Fetch History");
+    }
+  } catch {
+    throw new Error("Internal Server Error");
+  }
+}
+
+// Add authentication to make sure it is the right person getting this data
 router.post("/mail-webhook", async (req, res) => {
   const message = req.body.message;
 
@@ -49,7 +121,6 @@ router.get("/get-threads", verifyToken, async (req, res) => {
       .eq("user_id", userId)
       .eq("type", "first");
 
-
     return res.status(200).json({
       success: true,
       data,
@@ -81,7 +152,6 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
     });
 
     const messages = threadData.data.messages || [];
-
 
     return res.status(200).json({ messages });
   } catch {
