@@ -97,7 +97,7 @@ export async function makeBody({
     subject,
     html,
     text: textFallback,
-    attachments,
+    attachments
   });
 
   return new Promise((resolve, reject) => {

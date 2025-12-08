@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
 import { simpleParser } from "mailparser";
 import { configureOAuth } from "../../services/googleServices.js";
+import { supabase } from "../../supabase/supabase.js";
 
 dotenv.config();
 
@@ -18,27 +19,20 @@ async function getHeader({ body, title }) {
   }
 }
 
-async function updateThreadInfo({ userId, gmail, threadId }) {
+async function updateThreadInfo({ gmail, threadId }) {
   try {
-    const thread = await gmail.users.threads.get({
-      userId: "me",
-      id: threadId,
-    });
-
-    const messages = thread.data.messages;
-    const lastMessage = messages[messages.length - 1];
-
     const lastUpdatedAt = new Date(
       parseInt(lastMessage.internalDate)
     ).toISOString();
-
     const { error: upsertError } = await supabaseClient
       .from("Messages")
       .upsert({
         sent_at: lastUpdatedAt,
         unread: false,
       })
-      .eq("thread_id", threadId);
+      .eq("thread_id", threadId)
+      .eq("type", "first"); 
+
     if (upsertError) {
       throw new Error("Failed to Upsert.");
     }
@@ -47,36 +41,36 @@ async function updateThreadInfo({ userId, gmail, threadId }) {
   }
 }
 
-async function updateInbox({ historyId, userId }) {
+// Update the
+async function updateInbox({historyId}) {
   try {
-    const history = await gmail.users.history.list({
-      userId: "me",
-      startHistoryId: historyId,
+    const gmail = await configureOAuth({
+      userId: "",
+      supabase: supabase,
     });
 
-    // Update the next
-    for (const item of history.data) {
-      const msgId = item;
-      for (const added of item.messagesAdded) {
-        const message = await gmail.users.messages.get({
-          userId: "me",
-          id: msgId,
-        });
-        const threadId = message.data.threadId;
-        await updateThreadInfo({ threadId, userId, gmail });
-      }
+    const history = await gmail.users.history.list({
+      userId: "me",
+      startHistoryId: "3040811",
+    });
+
+    console.log(history.data.history);
+    for (const msg of history.data.history) {
+      const threadId = msg.messages[0].threadId;
+      await updateThreadInfo({ threadId, gmail });
     }
 
-    // Update next
+    // Update The History Id To the Next
     const { error: historyUpdateError } = await supabaseClient
       .from("User_Profile")
-      .update({ historyId })
+      .upsert({ history_id: historyId })
       .eq("user_id", userId);
+
     if (historyUpdateError) {
       throw new Error("Failed To Fetch History");
     }
-  } catch {
-    throw new Error("Internal Server Error");
+  } catch (err) {
+    console.log(err);
   }
 }
 
@@ -85,8 +79,8 @@ router.post("/mail-webhook", async (req, res) => {
   const message = req.body.message;
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    //console.log(data);
-    //serverless soon maybe
+    //console.log(data);  data = { emailAddress: '', historyId:  }
+
     return res.status(200);
   } catch {
     return res.status(500).json({ message: "internal server error" });

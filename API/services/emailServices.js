@@ -240,6 +240,14 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
+    await gmail.users.messages.modify({
+      userId: "me",
+      id: sendResponse.data.id,
+      requestBody: {
+        addLabelIds: ["outreach"]  
+      }
+    });
+
     const { error: deletionError } = await supabase
       .from("Emails")
       .delete()

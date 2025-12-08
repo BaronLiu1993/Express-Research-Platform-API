@@ -522,15 +522,15 @@ router.post("/register/watch", verifyToken, async (req, res) => {
   try {
     const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
-    const status = await gmail.users.watch({
+    await gmail.users.watch({
       userId: "me",
       requestBody: {
-        topicName: "projects/uoftresearch/topics/research-gmail-topic", // Try eevrything for now and then switch
-        labelIds: []
+        topicName: "projects/uoftresearch/topics/research-gmail-topic", 
+        labelIds: ['outreach']
       },
     });
 
-    return res.status(200).json({ message: "Registered Successfully" });
+    return res.status(200);
   } catch (err) {
     return res.status(500).json({ message: "internal server error" });
   }
