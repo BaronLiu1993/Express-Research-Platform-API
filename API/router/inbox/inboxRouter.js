@@ -10,15 +10,6 @@ dotenv.config();
 
 const router = express.Router();
 
-async function getHeader({ body, title }) {
-  try {
-    const headerVal = body.find((obj) => obj.name == title).val;
-    return headerVal;
-  } catch {
-    throw new Error("Internal Server Error");
-  }
-}
-
 async function updateThreadInfo({ gmail, threadId }) {
   try {
     const lastUpdatedAt = new Date(
@@ -31,7 +22,7 @@ async function updateThreadInfo({ gmail, threadId }) {
         unread: false,
       })
       .eq("thread_id", threadId)
-      .eq("type", "first"); 
+      .eq("type", "first");
 
     if (upsertError) {
       throw new Error("Failed to Upsert.");
@@ -42,7 +33,7 @@ async function updateThreadInfo({ gmail, threadId }) {
 }
 
 // Update the
-async function updateInbox({historyId}) {
+async function updateInbox({ historyId }) {
   try {
     const gmail = await configureOAuth({
       userId: "",
@@ -55,6 +46,7 @@ async function updateInbox({historyId}) {
     });
 
     console.log(history.data.history);
+    
     for (const msg of history.data.history) {
       const threadId = msg.messages[0].threadId;
       await updateThreadInfo({ threadId, gmail });

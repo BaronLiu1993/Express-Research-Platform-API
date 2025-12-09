@@ -18,6 +18,8 @@ const scopes = [
   "profile",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.labels",
 ];
 
 router.get("/signup-with-google", async (req, res) => {
@@ -522,16 +524,39 @@ router.post("/register/watch", verifyToken, async (req, res) => {
   try {
     const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
-    await gmail.users.watch({
+    const newLabel = await gmail.users.labels.create({
       userId: "me",
       requestBody: {
-        topicName: "projects/uoftresearch/topics/research-gmail-topic", 
-        labelIds: ['outreach']
+        name: "outreach",
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
       },
     });
 
+    const outreachLabelId = newLabel.data.id;
+
+    const watchStatus = await gmail.users.watch({
+      userId: "me",
+      requestBody: {
+        topicName: "projects/uoftresearch/topics/research-gmail-topic",
+        labelIds: [outreachLabelId],
+      },
+    });
+
+    const { error: labelIdUpdateError } = await req.supabaseClient
+      .from("User_Profiles")
+      .upsert({ label_id: outreachLabelId })
+      .eq("user_id", userId);
+
+    if (labelIdUpdateError) {
+      return res.status(400).json({ message: "Failed To Update" });
+    }
+
+    console.log(watchStatus);
+
     return res.status(200);
   } catch (err) {
+    console.log(err);
     return res.status(500).json({ message: "internal server error" });
   }
 });
