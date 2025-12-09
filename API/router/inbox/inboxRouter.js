@@ -15,11 +15,12 @@ async function updateThreadInfo({ gmail, threadId }) {
     const lastUpdatedAt = new Date(
       parseInt(lastMessage.internalDate)
     ).toISOString();
+
     const { error: upsertError } = await supabaseClient
       .from("Messages")
-      .upsert({
+      .update({
         sent_at: lastUpdatedAt,
-        unread: false,
+        unread: true,
       })
       .eq("thread_id", threadId)
       .eq("type", "first");
@@ -33,7 +34,7 @@ async function updateThreadInfo({ gmail, threadId }) {
 }
 
 // Update the
-async function updateInbox({ historyId }) {
+async function updateInbox({ historyId, email }) {
   try {
     const gmail = await configureOAuth({
       userId: "",
@@ -42,7 +43,7 @@ async function updateInbox({ historyId }) {
 
     const history = await gmail.users.history.list({
       userId: "me",
-      startHistoryId: "3040811",
+      startHistoryId: historyId,
     });
 
     console.log(history.data.history);
@@ -73,7 +74,7 @@ router.post("/mail-webhook", async (req, res) => {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
     console.log(data); 
     // data = { emailAddress: '', historyId:  }
-
+    await updateInbox({historyId: data.historyId, email: data.emailAddress})
     return res.status(200);
   } catch {
     return res.status(500).json({ message: "internal server error" });

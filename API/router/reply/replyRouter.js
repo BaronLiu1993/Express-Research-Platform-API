@@ -40,7 +40,6 @@ router.post("/send-reply", verifyToken, async (req, res) => {
       threadId
     });
 
-    console.log(sendResponse)
 
     if (sendResponse.success) {
       return res.status(200).json({ message: "Sent Successfully!" });

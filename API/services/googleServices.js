@@ -21,6 +21,56 @@ export function decodeBody(encoded) {
   return buffer.toString("utf-8");
 }
 
+export async function configureOAuth({ email, supabase, fetchDrive = false }) {
+  try {
+    const { data: tokenData, error: tokenError } = await supabase
+      .from("User_Profiles")
+      .select("gmail_auth_token, gmail_refresh_token")
+      .eq("student_email", email)
+      .single();
+
+    if (tokenError || !tokenData) {
+      throw new Error("No tokens found for user");
+    }
+
+    const decryptedAccessToken = decryptToken(tokenData.gmail_auth_token);
+    const decryptedRefreshToken = decryptToken(tokenData.gmail_refresh_token);
+
+    if (!decryptedRefreshToken) {
+      throw new Error("No valid refresh token");
+    }
+
+    oauth2Client.setCredentials({
+      access_token: decryptedAccessToken,
+      refresh_token: decryptedRefreshToken,
+    });
+
+    const accessTokenResponse = await oauth2Client.getAccessToken();
+    const newAccessToken = accessTokenResponse.token;
+
+    const encryptedAccessToken = encryptToken(newAccessToken);
+    const { error: tokenInsertionError } = await supabase
+      .from("User_Profiles")
+      .update({ gmail_auth_token: encryptedAccessToken })
+      .eq("user_id", userId);
+
+    if (tokenInsertionError) {
+      throw new Error("Failed to Insert Token");
+    }
+
+    if (fetchDrive) {
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      const drive = google.drive({ version: "v3", auth: oauth2Client });
+      return { gmail, drive };
+    }
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    return gmail;
+  } catch (err) {
+    throw new Error("Internal Server Error");
+  }
+}
+
 export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
   try {
     const { data: tokenData, error: tokenError } = await supabase
@@ -130,6 +180,7 @@ export async function makeReplyBody({
   const formattedFrom = name ? `${name} <${from}>` : from;
   const headers = {};
   const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${trackingId}" width="1" height="1" style="display:none;" />`;
+  console.log(trackingPixel)
   const formattedHtml = html + trackingPixel;
 
   if (inReplyToMessageId) {

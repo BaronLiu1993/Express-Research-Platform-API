@@ -237,12 +237,13 @@ export async function sendSnippetEmail({
       requestBody: { message: { raw } },
     });
 
+
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
     });
 
-    await gmail.users.messages.modify({
+    const label = await gmail.users.messages.modify({
       userId: "me",
       id: sendResponse.data.id,
       requestBody: {
@@ -282,6 +283,7 @@ export async function sendSnippetEmail({
     return { message: "Internal Server Error" };
   }
 }
+
 
 export async function sendSnippetEmailWithAttachments({
   userId,

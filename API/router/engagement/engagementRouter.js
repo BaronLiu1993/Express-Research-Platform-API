@@ -14,11 +14,11 @@ router.get("/hi.png", async (req, res) => {
     const { analyticId } = req.query;
     if (analyticId) {
       const timestamp = new Date().toISOString();
+
       const { error: updateError } = await supabase
         .from("Messages")
         .update({ opened_email_at: timestamp, opened_email: true })
         .eq("tracking_id", analyticId);
-
 
       if (updateError) {
         return res.status(400).json({ message: "Failed to update" });
