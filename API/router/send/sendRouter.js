@@ -68,9 +68,9 @@ router.post("/create-variableless-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/send-draft", verifyToken, async (req, res) => {
-  const { userEmail, userName, professorData } = req.body;
+  const { userEmail, userName, professorData, labelId } = req.body;
   if (professorData.length > 5) {
-    res.status(400).json({ message: "Queueing Too Many" });
+    res.status(400).json({ message: "Queueing Too Many Emails" });
   }
   const userId = req.user.sub;
   try {
@@ -81,6 +81,7 @@ router.post("/send-draft", verifyToken, async (req, res) => {
         userEmail,
         userName,
         accessToken: req.token,
+        labelId,
         body: {
           professorId: professor.professor_id,
           professorEmail: professor.email,
@@ -97,9 +98,9 @@ router.post("/send-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/send-attachments-draft", verifyToken, async (req, res) => {
-  const { userEmail, userName, professorData } = req.body;
+  const { userEmail, userName, professorData, labelId } = req.body;
   if (professorData.length > 5) {
-    res.status(400).json({ message: "Queueing Too Many" });
+    res.status(400).json({ message: "Queueing Too Many Emails" });
   }
   const userId = req.user.sub;
   try {
@@ -110,6 +111,7 @@ router.post("/send-attachments-draft", verifyToken, async (req, res) => {
         userEmail,
         userName,
         accessToken: req.token,
+        labelId,
         body: {
           professorId: professor.professor_id,
           professorEmail: professor.email,

@@ -418,17 +418,18 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
 
     const { data: profile, error: profileError } = await req.supabaseClient
       .from("User_Profiles")
-      .select("user_id, student_name, student_email")
+      .select("user_id, student_name, student_email, label_id")
       .eq("user_id", user.id)
       .single();
     if (profileError) {
-      return res.status(500).json({ message: "Failed to Fetch Profile" });
+      return res.status(400).json({ message: "Failed to Fetch Profile" });
     }
 
     return res.status(200).json({
       user_id: profile.user_id,
       student_name: profile.student_name,
       student_email: profile.student_email,
+      label_id: profile.label_id
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
@@ -524,6 +525,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
   try {
     const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
+    
     const newLabel = await gmail.users.labels.create({
       userId: "me",
       requestBody: {
@@ -545,18 +547,17 @@ router.post("/register/watch", verifyToken, async (req, res) => {
 
     const { error: labelIdUpdateError } = await req.supabaseClient
       .from("User_Profiles")
-      .upsert({ label_id: outreachLabelId })
+      .update({ label_id: outreachLabelId })
       .eq("user_id", userId);
+
 
     if (labelIdUpdateError) {
       return res.status(400).json({ message: "Failed To Update" });
     }
 
-    console.log(watchStatus);
-
+  
     return res.status(200);
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "internal server error" });
   }
 });

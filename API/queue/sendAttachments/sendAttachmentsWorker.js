@@ -5,7 +5,7 @@ import { sendSnippetEmailWithAttachments } from "../../services/emailServices.js
 export const sendAttachmentsWorker = new Worker(
   "send-attachments-email",
   async (job) => {
-    const { userId, userEmail, userName, body, accessToken } = job.data;
+    const { userId, userEmail, userName, body, accessToken, labelId } = job.data;
     try {
       const result = await sendSnippetEmailWithAttachments({
         userId,
@@ -13,6 +13,7 @@ export const sendAttachmentsWorker = new Worker(
         userName,
         body,
         accessToken,
+        labelId
       });
       return result;
     } catch (err) {

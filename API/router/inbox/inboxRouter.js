@@ -46,7 +46,7 @@ async function updateInbox({ historyId }) {
     });
 
     console.log(history.data.history);
-    
+
     for (const msg of history.data.history) {
       const threadId = msg.messages[0].threadId;
       await updateThreadInfo({ threadId, gmail });
@@ -71,7 +71,8 @@ router.post("/mail-webhook", async (req, res) => {
   const message = req.body.message;
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    //console.log(data);  data = { emailAddress: '', historyId:  }
+    console.log(data); 
+    // data = { emailAddress: '', historyId:  }
 
     return res.status(200);
   } catch {

@@ -160,6 +160,7 @@ export async function sendSnippetEmail({
   userName,
   body,
   accessToken,
+  labelId
 }) {
   if (
     !userId ||
@@ -167,7 +168,8 @@ export async function sendSnippetEmail({
     !userName ||
     !body?.professorId ||
     !body?.professorEmail ||
-    !accessToken
+    !accessToken ||
+    !labelId
   ) {
     throw new Error("Missing required inputs");
   }
@@ -244,7 +246,7 @@ export async function sendSnippetEmail({
       userId: "me",
       id: sendResponse.data.id,
       requestBody: {
-        addLabelIds: ["outreach"]  
+        addLabelIds: [labelId]  
       }
     });
 
@@ -287,6 +289,7 @@ export async function sendSnippetEmailWithAttachments({
   userName,
   body,
   accessToken,
+  labelId
 }) {
   if (
     !userId ||
@@ -294,7 +297,8 @@ export async function sendSnippetEmailWithAttachments({
     !userName ||
     !body?.professorId ||
     !body?.professorEmail ||
-    !accessToken
+    !accessToken || 
+    !labelId
   ) {
     throw new Error("Missing required inputs");
   }
@@ -413,6 +417,14 @@ export async function sendSnippetEmailWithAttachments({
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
+    });
+
+    await gmail.users.messages.modify({
+      userId: "me",
+      id: sendResponse.data.id,
+      requestBody: {
+        addLabelIds: [labelId]  
+      }
     });
 
     const { error: deletionError } = await supabase
