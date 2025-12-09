@@ -72,9 +72,8 @@ router.post("/mail-webhook", async (req, res) => {
   const message = req.body.message;
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    console.log(data); 
     // data = { emailAddress: '', historyId:  }
-    await updateInbox({historyId: data.historyId, email: data.emailAddress})
+    //await updateInbox({historyId: data.historyId, email: data.emailAddress})
     return res.status(200);
   } catch {
     return res.status(500).json({ message: "internal server error" });
