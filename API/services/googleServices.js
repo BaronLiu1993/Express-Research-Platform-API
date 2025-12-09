@@ -21,7 +21,7 @@ export function decodeBody(encoded) {
   return buffer.toString("utf-8");
 }
 
-export async function configureOAuth({ email, supabase, fetchDrive = false }) {
+/**export async function configureOAuth({ email, supabase, fetchDrive = false }) {
   try {
     const { data: tokenData, error: tokenError } = await supabase
       .from("User_Profiles")
@@ -69,7 +69,7 @@ export async function configureOAuth({ email, supabase, fetchDrive = false }) {
   } catch (err) {
     throw new Error("Internal Server Error");
   }
-}
+} */
 
 export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
   try {
