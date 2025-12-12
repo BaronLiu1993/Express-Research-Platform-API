@@ -525,7 +525,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
   try {
     const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
-    
+  
     const newLabel = await gmail.users.labels.create({
       userId: "me",
       requestBody: {
@@ -537,13 +537,18 @@ router.post("/register/watch", verifyToken, async (req, res) => {
 
     const outreachLabelId = newLabel.data.id;
 
+    
     const watchStatus = await gmail.users.watch({
       userId: "me",
       requestBody: {
         topicName: "projects/uoftresearch/topics/research-gmail-topic",
         labelIds: [outreachLabelId],
+        labelFilterBehavior: "include",
       },
     });
+
+    console.log(watchStatus)
+    
 
     const { error: labelIdUpdateError } = await req.supabaseClient
       .from("User_Profiles")
@@ -556,7 +561,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
     }
 
   
-    return res.status(200);
+    return res.status(200).json({ message: "success" });
   } catch (err) {
     return res.status(500).json({ message: "internal server error" });
   }

@@ -237,18 +237,18 @@ export async function sendSnippetEmail({
       requestBody: { message: { raw } },
     });
 
-
+    
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
     });
 
-    const label = await gmail.users.messages.modify({
+    const labelResponse = await gmail.users.threads.modify({
       userId: "me",
-      id: sendResponse.data.id,
+      id: sendResponse.data.threadId,
       requestBody: {
-        addLabelIds: [labelId]  
-      }
+        addLabelIds: [labelId],
+      },
     });
 
     const { error: deletionError } = await supabase

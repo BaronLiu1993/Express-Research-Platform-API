@@ -36,28 +36,32 @@ async function updateThreadInfo({ gmail, threadId }) {
 // Update the
 async function updateInbox({ historyId, email }) {
   try {
-    const gmail = await configureOAuth({
-      userId: "",
-      supabase: supabase,
-    });
-
+    const gmail = await configureOAuth({ userId: "", supabase })
     const history = await gmail.users.history.list({
       userId: "me",
       startHistoryId: historyId,
     });
 
     console.log(history.data.history);
+    for (let historyObj in history.data.history) {
+      console.log(historyObj.messages)
+    }
+
+    console.log(history.data.history[0].messages);
+
+    
+     
 
     for (const msg of history.data.history) {
       const threadId = msg.messages[0].threadId;
-      await updateThreadInfo({ threadId, gmail });
+
+      // await updateThreadInfo({ threadId, gmail });
     }
 
-    // Update The History Id To the Next
-    const { error: historyUpdateError } = await supabaseClient
+    const { error: historyUpdateError } = await supabase
       .from("User_Profile")
       .upsert({ history_id: historyId })
-      .eq("user_id", userId);
+      .eq("user_id", "");
 
     if (historyUpdateError) {
       throw new Error("Failed To Fetch History");
@@ -72,9 +76,10 @@ router.post("/mail-webhook", async (req, res) => {
   const message = req.body.message;
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
+    console.log(data)
     // data = { emailAddress: '', historyId:  }
-    //await updateInbox({historyId: data.historyId, email: data.emailAddress})
-    return res.status(200);
+    await updateInbox({ historyId: data.historyId, email: data.emailAddress})
+    return res.status(200).json({message: "Succeeded!"});
   } catch {
     return res.status(500).json({ message: "internal server error" });
   }
