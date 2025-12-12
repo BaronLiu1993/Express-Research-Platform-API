@@ -10,30 +10,7 @@ dotenv.config();
 
 const router = express.Router();
 
-async function updateThreadInfo({ gmail, threadId }) {
-  try {
-    const lastUpdatedAt = new Date(
-      parseInt(lastMessage.internalDate)
-    ).toISOString();
-
-    const { error: upsertError } = await supabaseClient
-      .from("Messages")
-      .update({
-        sent_at: lastUpdatedAt,
-        unread: true,
-      })
-      .eq("thread_id", threadId)
-      .eq("type", "first");
-
-    if (upsertError) {
-      throw new Error("Failed to Upsert.");
-    }
-  } catch {
-    throw new Error("Internal Server Error");
-  }
-}
-
-// Update the
+// Update
 async function updateInbox({ historyId, email }) {
   try {
     const gmail = await configureOAuth({ userId: "", supabase })
@@ -43,28 +20,35 @@ async function updateInbox({ historyId, email }) {
     });
 
     console.log(history.data.history);
-    for (let historyObj in history.data.history) {
-      console.log(historyObj.messages)
-    }
-
     console.log(history.data.history[0].messages);
 
     
-     
-
     for (const msg of history.data.history) {
       const threadId = msg.messages[0].threadId;
+      console.log(threadId)
 
-      // await updateThreadInfo({ threadId, gmail });
+      const lastUpdatedAt = new Date().toISOString();
+  
+      const { error: upsertError } = await supabase
+        .from("Messages")
+        .update({
+          sent_at: lastUpdatedAt,
+          unread: true,
+        })
+        .eq("thread_id", threadId)
+        .eq("type", "first");
+      
+      console.log(upsertError)
     }
 
     const { error: historyUpdateError } = await supabase
-      .from("User_Profile")
-      .upsert({ history_id: historyId })
+      .from("User_Profiles")
+      .update({ history_id: historyId })
       .eq("user_id", "");
-
+    
+    console.log(historyUpdateError)
     if (historyUpdateError) {
-      throw new Error("Failed To Fetch History");
+      throw new Error("Failed To Update History");
     }
   } catch (err) {
     console.log(err);

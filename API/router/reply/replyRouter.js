@@ -10,8 +10,6 @@ router.post("/send-reply", verifyToken, async (req, res) => {
   const { userEmail, userName, professorEmail, professorName, body, subject, threadId } =
     req.body;
   const userId = req.user.sub;
-  
-
   if (
     !userEmail ||
     !userName ||

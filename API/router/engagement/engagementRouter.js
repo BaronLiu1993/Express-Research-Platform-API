@@ -16,7 +16,6 @@ router.get("/hi.png", async (req, res) => {
     const decryptedAnalyticId = decryptToken(analyticId)
     if (decryptedAnalyticId) {
       const timestamp = new Date().toISOString();
-
       const { error: updateError } = await supabase
         .from("Messages")
         .update({ opened_email_at: timestamp, opened_email: true })
