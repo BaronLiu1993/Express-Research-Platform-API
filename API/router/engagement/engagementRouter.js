@@ -3,6 +3,7 @@ import express from "express";
 
 import path from "path";
 import { fileURLToPath } from "url";
+import { decryptToken } from "../../services/authServices.js";
 
 const router = express.Router();
 
@@ -12,16 +13,24 @@ const __dirname = path.dirname(__filename);
 router.get("/hi.png", async (req, res) => {
   try {
     const { analyticId } = req.query;
-    if (analyticId) {
+    const decryptedAnalyticId = decryptToken(analyticId)
+    if (decryptedAnalyticId) {
       const timestamp = new Date().toISOString();
 
       const { error: updateError } = await supabase
         .from("Messages")
         .update({ opened_email_at: timestamp, opened_email: true })
-        .eq("tracking_id", analyticId);
+        .eq("tracking_id", decryptedAnalyticId);
       
       if (updateError) {
-        return res.status(400).json({ message: "Failed to update" });
+        res.sendFile(path.join(__dirname, "public", "hi.png"), {
+          headers: {
+            "Content-Type": "image/png",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        });
       }
     }
 
@@ -34,7 +43,14 @@ router.get("/hi.png", async (req, res) => {
       },
     });
   } catch {
-    return res.status(500).json({ message: "Failed to update" });
+    res.sendFile(path.join(__dirname, "public", "hi.png"), {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    });
   }
 });
 

@@ -180,7 +180,6 @@ export async function makeReplyBody({
   const formattedFrom = name ? `${name} <${from}>` : from;
   const headers = {};
   const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${trackingId}" width="1" height="1" style="display:none;" />`;
-  console.log(trackingPixel)
   const formattedHtml = html + trackingPixel;
 
   if (inReplyToMessageId) {

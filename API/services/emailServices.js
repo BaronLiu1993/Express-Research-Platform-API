@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { configureOAuth } from "../services/googleServices.js";
 import { simpleParser } from "mailparser";
 import { generateGetPresignedURL } from "./storageServices.js";
+import { encryptToken } from "./authServices.js";
 
 dotenv.config();
 
@@ -193,7 +194,7 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Fetch Drafts");
     }
 
-    const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${encryptToken(draftData.tracking_id)}" width="1" height="1" style="display:none;" />`;
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
@@ -243,6 +244,7 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
+    // Modify, i need to find a way to also get notifications when a new response is made to an email
     const labelResponse = await gmail.users.threads.modify({
       userId: "me",
       id: sendResponse.data.threadId,
@@ -371,7 +373,7 @@ export async function sendSnippetEmailWithAttachments({
       throw new Error("Failed to Fetch Drafts");
     }
 
-    const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${draftData.tracking_id}" width="1" height="1" style="display:none;" />`;
+    const trackingPixel = `<img src="${BACKEND_API_BASE}/engagement/hi.png?analyticId=${encryptToken(draftData.tracking_id)}" width="1" height="1" style="display:none;" />`;
 
     const draft = await gmail.users.drafts.get({
       userId: "me",
@@ -487,6 +489,8 @@ export async function sendReply({
 
     // Configure Gmail OAuth
     const gmail = await configureOAuth({ userId, supabase });
+
+    //Get first emails header
     const message = await gmail.users.messages.get({
       userId: "me",
       id: messageId,
@@ -502,7 +506,7 @@ export async function sendReply({
       subject,
       html: body,
       inReplyToMessageId: replyId,
-      trackingId: trackingId,
+      trackingId: encryptToken(trackingId),
     });
 
     // Send email via Gmail API
