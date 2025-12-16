@@ -1,13 +1,11 @@
 import express from "express";
 
-//External Library Imports
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
 
 dotenv.config();
 
-//Initialise OpenAI Client
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
@@ -16,16 +14,13 @@ const OPEN_AI = new OpenAI({
 const router = express.Router();
 
 router.get("/taishan", verifyToken, async (req, res) => {
-  // ---- constants / guards ----
   const LIMIT = 20;
   const MAX_LIST_ITEMS = 30;
-  const MAX_STRING_LEN = 256;
+  const MAX_STRING_LEN = 100;
 
-  // Allow letters, numbers, spaces and common safe punctuation
   const SAFE_TEXT_RE = /^[a-zA-Z0-9 .,'"\-()!?/&+:@#%]*$/; 
-  const SAFE_TOKEN_RE = /^[a-zA-Z0-9 .,'"\-()&/]+$/; // for school/faculty/department tokens
+  const SAFE_TOKEN_RE = /^[a-zA-Z0-9 .,'"\-()&/]+$/; 
 
-  // ---- sanitizers ----
   const clampLen = (s, max = MAX_STRING_LEN) => (s.length > max ? s.slice(0, max) : s);
   const normalize = (s) => s.normalize("NFKC").trim();
 
@@ -41,11 +36,9 @@ router.get("/taishan", verifyToken, async (req, res) => {
       .map((v) => clampLen(normalize(String(v || ""))))
       .filter(Boolean)
       .filter((v) => SAFE_TOKEN_RE.test(v));
-    // dedupe + cap size
     return [...new Set(cleaned)].slice(0, MAX_LIST_ITEMS);
   };
 
-  // ---- read & sanitize inputs ----
   const pageNum = Math.max(1, Number(req.query.page) || 1);
   const from = (pageNum - 1) * LIMIT;
   const to = from + LIMIT - 1;
@@ -60,11 +53,8 @@ router.get("/taishan", verifyToken, async (req, res) => {
   const facultyList = toList(req.query.faculty);
   const departmentList = toList(req.query.department);
 
-  // ---- main ----
   try {
-    // SEARCH PATH (vector search + post-filter + paginate)
     if (search && search !== "") {
-      // (Do not change this block)
       const embeddingResult = await OPEN_AI.embeddings.create({
         model: "text-embedding-3-large",
         input: search,
@@ -80,13 +70,13 @@ router.get("/taishan", verifyToken, async (req, res) => {
         {
           student_embedding: embedding,
           match_threshold: 0.2,
-          page_size: 500, // fetch a generous page so we can filter client-side
+          page_size: 20, 
           page_offset: 0,
         }
       );
-      if (error) throw error;
-
-      // post-filter in Node (safe exact matches)
+      if (error) {
+        return res.status(400).json({message: "Failed to retrieve"})
+      }
       const hasSchool = schoolList.length > 0;
       const hasFaculty = facultyList.length > 0;
       const hasDepartment = departmentList.length > 0;
@@ -107,7 +97,7 @@ router.get("/taishan", verifyToken, async (req, res) => {
       });
     }
 
-    // BROWSE/FILTER PATH (no search): server-side filters + pagination
+    // server-side filters + pagination
     let query = req.supabaseClient
       .from("Taishan")
       .select(
@@ -134,7 +124,7 @@ router.get("/taishan", verifyToken, async (req, res) => {
 
 router.get("/match-professors", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const match_count = 10;
+  const match_count = 15;
   const match_threshold = 0.2;
   try {
     const { data: matches, error: matchesFetchError } =
