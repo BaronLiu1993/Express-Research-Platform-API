@@ -159,7 +159,6 @@ router.delete(
   async (req, res) => {
     const userId = req.user.sub;
     const { fileName } = req.params;
-
     try {
       await deleteFile({
         userId,

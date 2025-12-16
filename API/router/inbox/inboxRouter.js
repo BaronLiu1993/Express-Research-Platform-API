@@ -44,7 +44,6 @@ async function updateInbox({ historyId, email, res }) {
       startHistoryId: historyIdData.history_id,
     });
 
-    console.log(res);
     const threadIdSet = new Set();
     for (const msg of res.data.history) {
       const threadId = msg.messages[0].threadId;
@@ -53,14 +52,12 @@ async function updateInbox({ historyId, email, res }) {
 
     // Sometimes history data does not exist because no new message was added
     for (const threadId of threadIdSet) {
-      console.log(threadId);
       if (threadId) {
         const { data, error } = await supabase.rpc("tracked_thread_exists", {
           p_user_id: userDataId.user_id,
           p_thread_id: threadId,
         });
 
-        console.log(data);
 
         if (error) {
           return res.status(400).json({ message: "internal server error" });
@@ -79,9 +76,6 @@ async function updateInbox({ historyId, email, res }) {
           if (upsertError) {
             return res.status(400).json({ message: "internal server error" });
           }
-
-          console.log("fired");
-          console.log(upsertError);
         }
       }
     }
@@ -101,12 +95,10 @@ async function updateInbox({ historyId, email, res }) {
 
 // Add authentication to make sure it is the right person getting this data and that it is being sent from the right place too
 router.post("/mail-webhook", async (req, res) => {
-  const response = await verifyPubSubJwt(req, res); // Check if it is actually from pub sub, verify
+  await verifyPubSubJwt(req, res); // Check if it is actually from pub sub, verify
   const message = req.body.message;
-  console.log(response);
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    console.log(data);
     // data = { emailAddress: '', historyId:  }
     await updateInbox({
       historyId: data.historyId,
@@ -122,7 +114,7 @@ router.post("/mail-webhook", async (req, res) => {
 router.post("/seen", verifyToken, async (req, res) => {
   const threadId = req.query.threadId;
   try {
-    const { error: updateError } = await supabase
+    const { error: updateError } = await req.supabaseClient
       .from("Messages")
       .update({ unread: false })
       .eq("thread_id", threadId)
