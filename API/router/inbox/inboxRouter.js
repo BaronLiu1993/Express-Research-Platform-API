@@ -5,67 +5,136 @@ import { verifyToken } from "../../services/authServices.js";
 import { simpleParser } from "mailparser";
 import { configureOAuth } from "../../services/googleServices.js";
 import { supabase } from "../../supabase/supabase.js";
+import { verifyPubSubJwt } from "../../services/authServices.js";
 
 dotenv.config();
 
 const router = express.Router();
 
 // Update
-async function updateInbox({ historyId, email }) {
+async function updateInbox({ historyId, email, res }) {
   try {
-    const gmail = await configureOAuth({ userId: "", supabase })
-    const history = await gmail.users.history.list({
-      userId: "me",
-      startHistoryId: historyId,
+    const { data: userDataId, error: userDataFetchError } = await supabase
+      .from("User_Profiles")
+      .select("user_id")
+      .eq("student_email", email)
+      .single();
+
+    if (userDataFetchError) {
+      return res.status(400).json({ message: "internal server error" });
+    }
+
+    const gmail = await configureOAuth({
+      userId: userDataId.user_id,
+      supabase,
     });
 
-    console.log(history.data.history);
-    console.log(history.data.history[0].messages);
+    const { data: historyIdData, error: historyIdFetchError } = await supabase
+      .from("User_Profiles")
+      .select("history_id")
+      .eq("user_id", userDataId.user_id)
+      .single();
 
-    
-    for (const msg of history.data.history) {
+    if (historyIdFetchError) {
+      return res.status(400).json({ message: "internal server error" });
+    }
+
+    const res = await gmail.users.history.list({
+      userId: "me",
+      startHistoryId: historyIdData.history_id,
+    });
+
+    console.log(res);
+    const threadIdSet = new Set();
+    for (const msg of res.data.history) {
       const threadId = msg.messages[0].threadId;
-      console.log(threadId)
+      threadIdSet.add(threadId);
+    }
 
-      const lastUpdatedAt = new Date().toISOString();
-  
-      const { error: upsertError } = await supabase
-        .from("Messages")
-        .update({
-          sent_at: lastUpdatedAt,
-          unread: true,
-        })
-        .eq("thread_id", threadId)
-        .eq("type", "first");
-      
-      console.log(upsertError)
+    // Sometimes history data does not exist because no new message was added
+    for (const threadId of threadIdSet) {
+      console.log(threadId);
+      if (threadId) {
+        const { data, error } = await supabase.rpc("tracked_thread_exists", {
+          p_user_id: userDataId.user_id,
+          p_thread_id: threadId,
+        });
+
+        console.log(data);
+
+        if (error) {
+          return res.status(400).json({ message: "internal server error" });
+        }
+
+        if (data === true) {
+          const lastUpdatedAt = new Date().toISOString();
+          const { error: upsertError } = await supabase
+            .from("Messages")
+            .update({
+              sent_at: lastUpdatedAt,
+              unread: true,
+            })
+            .eq("thread_id", threadId)
+            .eq("type", "first");
+          if (upsertError) {
+            return res.status(400).json({ message: "internal server error" });
+          }
+
+          console.log("fired");
+          console.log(upsertError);
+        }
+      }
     }
 
     const { error: historyUpdateError } = await supabase
       .from("User_Profiles")
       .update({ history_id: historyId })
-      .eq("user_id", "");
-    
-    console.log(historyUpdateError)
+      .eq("user_id", userDataId.user_id);
+
     if (historyUpdateError) {
-      throw new Error("Failed To Update History");
+      return res.status(400).json({ message: "internal server error" });
     }
   } catch (err) {
-    console.log(err);
+    return res.status(500).json({ message: "internal server error" });
   }
 }
 
-// Add authentication to make sure it is the right person getting this data
+// Add authentication to make sure it is the right person getting this data and that it is being sent from the right place too
 router.post("/mail-webhook", async (req, res) => {
+  const response = await verifyPubSubJwt(req, res); // Check if it is actually from pub sub, verify
   const message = req.body.message;
+  console.log(response);
   try {
     const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    console.log(data)
+    console.log(data);
     // data = { emailAddress: '', historyId:  }
-    await updateInbox({ historyId: data.historyId, email: data.emailAddress})
-    return res.status(200).json({message: "Succeeded!"});
+    await updateInbox({
+      historyId: data.historyId,
+      email: data.emailAddress,
+      res,
+    });
+    return res.status(200).json({ message: "Sent" });
   } catch {
     return res.status(500).json({ message: "internal server error" });
+  }
+});
+
+router.post("/seen", verifyToken, async (req, res) => {
+  const threadId = req.query.threadId;
+  try {
+    const { error: updateError } = await supabase
+      .from("Messages")
+      .update({ unread: false })
+      .eq("thread_id", threadId)
+      .eq("type", "first");
+
+    if (updateError) {
+      return res.status(400).json({ message: "Failed to update" });
+    }
+
+    return res.status(200).json({ message: "Seen Data" });
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 

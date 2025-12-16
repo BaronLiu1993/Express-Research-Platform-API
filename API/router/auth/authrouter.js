@@ -429,7 +429,7 @@ router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
       user_id: profile.user_id,
       student_name: profile.student_name,
       student_email: profile.student_email,
-      label_id: profile.label_id
+      label_id: profile.label_id,
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
@@ -525,42 +525,25 @@ router.post("/register/watch", verifyToken, async (req, res) => {
   try {
     const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
-  
-    const newLabel = await gmail.users.labels.create({
-      userId: "me",
-      requestBody: {
-        name: "outreach",
-        labelListVisibility: "labelShow",
-        messageListVisibility: "show",
-      },
-    });
 
-    const outreachLabelId = newLabel.data.id;
-
-    
     const watchStatus = await gmail.users.watch({
       userId: "me",
       requestBody: {
         topicName: "projects/uoftresearch/topics/research-gmail-topic",
-        labelIds: [outreachLabelId],
+        labelIds: ["INBOX"],
         labelFilterBehavior: "include",
       },
     });
 
-    console.log(watchStatus)
-    
-
-    const { error: labelIdUpdateError } = await req.supabaseClient
+    const { error: historyUpdateError } = await supabase
       .from("User_Profiles")
-      .update({ label_id: outreachLabelId })
+      .update({ history_id: watchStatus.data.historyId })
       .eq("user_id", userId);
 
-
-    if (labelIdUpdateError) {
-      return res.status(400).json({ message: "Failed To Update" });
+    if (historyUpdateError) {
+      return res.status(400).json({ message: "Failed to update history" });
     }
 
-  
     return res.status(200).json({ message: "success" });
   } catch (err) {
     return res.status(500).json({ message: "internal server error" });

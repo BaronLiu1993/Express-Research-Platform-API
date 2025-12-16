@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import { createClient } from "@supabase/supabase-js";
 import CryptoJS from "crypto-js";
+import { OAuth2Client } from "google-auth-library";
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 const secretKey = process.env.GMAIL_SECRET_KEY;
+const client = new OAuth2Client();
 
 const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
@@ -40,6 +42,7 @@ export function decryptToken(token) {
   }
 }
 
+// Give restrictions on what can be generated
 export async function generateEmbeddings(research_input_embeddings) {
   try {
     const embeddings = await OPEN_AI.embeddings.create({
@@ -50,6 +53,30 @@ export async function generateEmbeddings(research_input_embeddings) {
   } catch {
     throw Error("Failed to Embed");
   }
+}
+
+export async function verifyPubSubJwt(req, res) {
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer (.+)$/);
+  if (!m) {
+    return res.status(401).json({message:"No Service Header"})
+  };
+
+  const token = m[1];
+  const audience = process.env.PUBSUB_PUSH_AUDIENCE;
+  const ticket = await client.verifyIdToken({ idToken: token, audience });
+  const payload = ticket.getPayload();
+
+  if (!payload?.email_verified) {
+    return res.status(401).json({message:"Emailed Not Verfied"})
+  };
+
+  if (payload.email !== process.env.PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL) {
+    return res.status(401).json({message:"Wrong Service Account"})
+
+  }
+
+  return payload;
 }
 
 //Refresh In Here

@@ -244,14 +244,7 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
-    // Modify, i need to find a way to also get notifications when a new response is made to an email
-    const labelResponse = await gmail.users.threads.modify({
-      userId: "me",
-      id: sendResponse.data.threadId,
-      requestBody: {
-        addLabelIds: [labelId],
-      },
-    });
+   
 
     const { error: deletionError } = await supabase
       .from("Emails")
@@ -261,6 +254,13 @@ export async function sendSnippetEmail({
     if (deletionError) {
       throw new Error("Failed to Delete");
     }
+
+    const { error: trackInsertionError } = await supabase
+      .from("Track")
+      .insert({
+        user_id: userId,
+        thread_id: sendResponse.data.threadId,
+      });
 
     const { error: messageInsertionError } = await supabase
       .from("Messages")
@@ -276,7 +276,7 @@ export async function sendSnippetEmail({
         identifier_id: sendResponse.data.id,
       });
 
-    if (messageInsertionError) {
+    if (messageInsertionError || trackInsertionError) {
       throw new Error("Failed to Insert into Database");
     }
 
@@ -423,14 +423,6 @@ export async function sendSnippetEmailWithAttachments({
       requestBody: { id: draftData.draft_id },
     });
 
-    await gmail.users.messages.modify({
-      userId: "me",
-      id: sendResponse.data.id,
-      requestBody: {
-        addLabelIds: [labelId]  
-      }
-    });
-
     const { error: deletionError } = await supabase
       .from("Emails")
       .delete()
@@ -439,6 +431,13 @@ export async function sendSnippetEmailWithAttachments({
     if (deletionError) {
       throw new Error("Failed to Delete");
     }
+
+    const { error: trackInsertionError } = await supabase
+      .from("Track")
+      .insert({
+        user_id: userId,
+        thread_id: sendResponse.data.threadId,
+      });
 
     const { error: messageInsertionError } = await supabase
       .from("Messages")
@@ -454,7 +453,7 @@ export async function sendSnippetEmailWithAttachments({
         identifier_id: sendResponse.data.id,
       });
 
-    if (messageInsertionError) {
+    if (messageInsertionError || trackInsertionError) {
       throw new Error("Failed to Insert into Database");
     }
 
