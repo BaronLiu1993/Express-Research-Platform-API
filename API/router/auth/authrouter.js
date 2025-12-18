@@ -7,6 +7,7 @@ import {
 import { encryptToken } from "../../services/authServices.js";
 import dotenv from "dotenv";
 import { configureOAuth } from "../../services/googleServices.js";
+import watchQueue from "../../queue/watch/watchQueue.js";
 
 dotenv.config();
 
@@ -18,8 +19,6 @@ const scopes = [
   "profile",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/gmail.labels",
 ];
 
 router.get("/signup-with-google", async (req, res) => {
@@ -519,10 +518,38 @@ router.post("/update-profile", verifyToken, async (req, res) => {
   }
 });
 
+router.post("/register/watch/queue", async (req, res) => {
+  const { watchData } = req.body;
+  try {
+    const jobs = watchData.map((watch) => ({
+      name: "refresh-watch",
+      data: {
+        userId: watch.userId,
+      },
+    }));
+    await watchQueue.addBulk(jobs);
+  } catch {
+    return res.status(500).json({ message: "internal server error" });
+  }
+});
+
 router.post("/register/watch", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  const { data: dataCompletionData, error: completionError } =
+    await req.supabaseClient
+      .from("User_Profiles")
+      .select("finished_registration")
+      .eq("user_id", userId);
+
+  if (completionError) {
+    return res.status(400).json({ message: "Failed To Fetch Data." });
+  }
+
+  if (dataCompletionData.finished_registration === true) {
+    return res.status(429).json({ message: "Already Registered." });
+  }
+
   try {
-    const supabase = req.supabaseClient;
     const gmail = await configureOAuth({ userId, supabase });
 
     const watchStatus = await gmail.users.watch({
@@ -534,9 +561,13 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
-    const { error: historyUpdateError } = await supabase
+    const currentTime = new Date().toISOString();
+    const { error: historyUpdateError } = await req.supabaseClient
       .from("User_Profiles")
-      .update({ history_id: watchStatus.data.historyId })
+      .update({
+        history_id: watchStatus.data.historyId,
+        updated_watch: currentTime,
+      })
       .eq("user_id", userId);
 
     if (historyUpdateError) {

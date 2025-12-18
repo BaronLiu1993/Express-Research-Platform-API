@@ -61,7 +61,6 @@ export async function deleteFile({ userId, fileType, fileName }) {
     if (!userId || !fileType || !fileName) {
       throw new Error("Missing Parameters");
     }
-
     const { error } = await supabase.storage
       .from("userfiles")
       .remove([`${userId}/${fileType}/${fileName}.pdf`]);

@@ -23,12 +23,8 @@ router.post("/mail-webhook", async (req, res) => {
        email: pubSubData.emailAddress
       },
     });
-    await updateInbox({
-      historyId: data.historyId,
-      email: data.emailAddress,
-      res,
-    });
-    return res.status(200).json({ message: "Sent" });
+    
+    return res.status(200).json({ message: "Finished Update" });
   } catch {
     return res.status(500).json({ message: "internal server error" });
   }
