@@ -70,7 +70,7 @@ router.get("/taishan", verifyToken, async (req, res) => {
         {
           student_embedding: embedding,
           match_threshold: 0.2,
-          page_size: 20, 
+          page_size: 200, 
           page_offset: 0,
         }
       );
@@ -96,8 +96,6 @@ router.get("/taishan", verifyToken, async (req, res) => {
         tableCount,
       });
     }
-
-    // server-side filters + pagination
     let query = req.supabaseClient
       .from("Taishan")
       .select(

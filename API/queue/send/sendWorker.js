@@ -6,6 +6,7 @@ export const sendWorker = new Worker(
   "send-email",
   async (job) => {
     const { userId, userEmail, userName, body, accessToken, labelId } = job.data;
+    console.log(`[Worker] Processing job ${job.id} for user: ${userEmail}`);
     try {
       const result = await sendSnippetEmail({
         userId,
@@ -17,9 +18,8 @@ export const sendWorker = new Worker(
       });
       return result;
     } catch (err) {
-      // Add Telemetry Here
-
-      throw new Error("Failed To Send");
+      console.error(`[Worker] Error in job ${job.id} processor:`, err.message);
+      throw err; 
     }
   },
   {
@@ -33,17 +33,21 @@ export const sendWorker = new Worker(
 );
 
 sendWorker.on("completed", (job, result) => {
-  // Add Telemetry Here
+  console.log(`[Worker] Job ${job.id} completed. Result:`, result?.status || "Success");
 });
 
 sendWorker.on("failed", (job, err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Job ${job?.id} failed after ${job?.attemptsMade} attempts. Reason: ${err.message}`);
+  
+  if (job?.attemptsMade >= (job?.opts?.attempts || 1)) {
+    console.error(`[Worker] Critical: Job ${job?.id} has exhausted all retries.`);
+  }
 });
 
-sendWorker.on("stalled", (job) => {
-  // Add Telemetry Here
+sendWorker.on("stalled", (jobId) => {
+  console.warn(`[Worker] Job ${jobId} has stalled. It will be re-processed.`);
 });
 
 sendWorker.on("error", (err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Internal Worker Error:`, err);
 });

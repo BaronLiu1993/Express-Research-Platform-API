@@ -13,15 +13,20 @@
   "dependencies": {
     "@elastic/elasticsearch": "^8.17.1",
     "@google-cloud/pubsub": "^5.1.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.67.2",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.208.0",
+    "@opentelemetry/sdk-node": "^0.208.0",
     "@supabase/supabase-js": "^2.49.4",
     "backend_researcher": "file:",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.1",
     "bullmq": "^5.53.3",
+    "bullmq-otel": "^1.0.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "email-reply-parser": "^2.0.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
@@ -40,6 +45,6 @@
     "redis": "^5.5.6"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.1.11"
   }
 }

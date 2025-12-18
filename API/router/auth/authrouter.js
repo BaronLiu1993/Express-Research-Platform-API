@@ -396,12 +396,11 @@ router.get("/get-user", async (req, res) => {
   }
 });
 
-//Get Enough Info for Sidebar
 router.get("/get-user-sidebar-info", verifyToken, async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "No Bearer token provided" });
+    return res.status(401).json({ message: "Not Authenticated" });
   }
 
   const accessToken = authHeader.split(" ")[1];

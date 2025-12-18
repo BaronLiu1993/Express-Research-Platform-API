@@ -6,6 +6,7 @@ export const draftWorker = new Worker(
   "generate-draft",
   async (job) => {
     const { userId, professorId, body, accessToken } = job.data;
+    console.log(`[Worker] Starting job ${job.id} - Queue: generate-draft - User: ${userId}`);
     try {
       const result = await generateDraftFromSnippetEmail({
         userId,
@@ -15,8 +16,8 @@ export const draftWorker = new Worker(
       });
       return result;
     } catch (err) {
-      // Add Telemetry Here
-      throw new Error("Failed");
+      console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
+      throw err;
     }
   },
   {
@@ -30,17 +31,17 @@ export const draftWorker = new Worker(
 );
 
 draftWorker.on("completed", (job, result) => {
-  // Add Telemetry Here
+  console.log(`[Worker] Job ${job.id} completed successfully`);
 });
 
 draftWorker.on("failed", (job, err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Job ${job?.id} failed - Attempt ${job?.attemptsMade}:`, err.message);
 });
 
-draftWorker.on("stalled", (job, err) => {
-  // Add Telemetry Here
+draftWorker.on("stalled", (jobId) => {
+  console.warn(`[Worker] Job ${jobId} stalled and will be retried`);
 });
 
 draftWorker.on("error", (err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Internal worker error:`, err);
 });

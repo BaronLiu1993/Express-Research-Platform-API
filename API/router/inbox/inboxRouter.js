@@ -4,102 +4,25 @@ import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
 import { simpleParser } from "mailparser";
 import { configureOAuth } from "../../services/googleServices.js";
-import { supabase } from "../../supabase/supabase.js";
 import { verifyPubSubJwt } from "../../services/authServices.js";
+import inboxQueue from "../../queue/inbox/inboxQueue.js";
 
 dotenv.config();
 
 const router = express.Router();
 
-// Update
-async function updateInbox({ historyId, email, res }) {
-  try {
-    const { data: userDataId, error: userDataFetchError } = await supabase
-      .from("User_Profiles")
-      .select("user_id")
-      .eq("student_email", email)
-      .single();
-
-    if (userDataFetchError) {
-      return res.status(400).json({ message: "internal server error" });
-    }
-
-    const gmail = await configureOAuth({
-      userId: userDataId.user_id,
-      supabase,
-    });
-
-    const { data: historyIdData, error: historyIdFetchError } = await supabase
-      .from("User_Profiles")
-      .select("history_id")
-      .eq("user_id", userDataId.user_id)
-      .single();
-
-    if (historyIdFetchError) {
-      return res.status(400).json({ message: "internal server error" });
-    }
-
-    const res = await gmail.users.history.list({
-      userId: "me",
-      startHistoryId: historyIdData.history_id,
-    });
-
-    const threadIdSet = new Set();
-    for (const msg of res.data.history) {
-      const threadId = msg.messages[0].threadId;
-      threadIdSet.add(threadId);
-    }
-
-    // Sometimes history data does not exist because no new message was added
-    for (const threadId of threadIdSet) {
-      if (threadId) {
-        const { data, error } = await supabase.rpc("tracked_thread_exists", {
-          p_user_id: userDataId.user_id,
-          p_thread_id: threadId,
-        });
-
-
-        if (error) {
-          return res.status(400).json({ message: "internal server error" });
-        }
-
-        if (data === true) {
-          const lastUpdatedAt = new Date().toISOString();
-          const { error: upsertError } = await supabase
-            .from("Messages")
-            .update({
-              sent_at: lastUpdatedAt,
-              unread: true,
-            })
-            .eq("thread_id", threadId)
-            .eq("type", "first");
-          if (upsertError) {
-            return res.status(400).json({ message: "internal server error" });
-          }
-        }
-      }
-    }
-
-    const { error: historyUpdateError } = await supabase
-      .from("User_Profiles")
-      .update({ history_id: historyId })
-      .eq("user_id", userDataId.user_id);
-
-    if (historyUpdateError) {
-      return res.status(400).json({ message: "internal server error" });
-    }
-  } catch (err) {
-    return res.status(500).json({ message: "internal server error" });
-  }
-}
-
-// Add authentication to make sure it is the right person getting this data and that it is being sent from the right place too
 router.post("/mail-webhook", async (req, res) => {
-  await verifyPubSubJwt(req, res); // Check if it is actually from pub sub, verify
+  await verifyPubSubJwt(req, res); 
   const message = req.body.message;
   try {
-    const data = JSON.parse(Buffer.from(message.data, "base64").toString());
-    // data = { emailAddress: '', historyId:  }
+    const pubSubData = JSON.parse(Buffer.from(message.data, "base64").toString());
+    await inboxQueue.add({
+      name: "inbox-sync",
+      data: {
+       historyId: pubSubData.historyId,
+       email: pubSubData.emailAddress
+      },
+    });
     await updateInbox({
       historyId: data.historyId,
       email: data.emailAddress,

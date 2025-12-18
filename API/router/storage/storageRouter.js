@@ -13,7 +13,7 @@ router.post("/generate-upload-url/resume", verifyToken, async (req, res) => {
   const { fileName, fileType } = req.body;
 
   if (!fileName || !fileType) {
-    return res.status(400).json({ message: "Invalid File Name of File Type" });
+    return res.status(400).json({ message: "Invalid Name or Type" });
   }
 
   try {

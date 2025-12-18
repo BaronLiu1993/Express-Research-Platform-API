@@ -6,6 +6,7 @@ export const sendAttachmentsWorker = new Worker(
   "send-attachments-email",
   async (job) => {
     const { userId, userEmail, userName, body, accessToken, labelId } = job.data;
+    console.log(`[Worker] Starting job ${job.id} - Queue: send-attachments-email - User: ${userEmail}`);
     try {
       const result = await sendSnippetEmailWithAttachments({
         userId,
@@ -17,8 +18,8 @@ export const sendAttachmentsWorker = new Worker(
       });
       return result;
     } catch (err) {
-      // Add Telemetry Here
-      throw new Error("Failed To Send");
+      console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
+      throw err;
     }
   },
   {
@@ -32,17 +33,17 @@ export const sendAttachmentsWorker = new Worker(
 );
 
 sendAttachmentsWorker.on("completed", (job, result) => {
-  // Add Telemetry Here
+  console.log(`[Worker] Job ${job.id} completed successfully`);
 });
 
 sendAttachmentsWorker.on("failed", (job, err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Job ${job?.id} failed - Attempt ${job?.attemptsMade}:`, err.message);
 });
 
-sendAttachmentsWorker.on("stalled", (job) => {
-  // Add Telemetry Here
+sendAttachmentsWorker.on("stalled", (jobId) => {
+  console.warn(`[Worker] Job ${jobId} stalled and will be retried`);
 });
 
 sendAttachmentsWorker.on("error", (err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Internal worker error:`, err);
 });

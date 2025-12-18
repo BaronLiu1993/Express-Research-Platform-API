@@ -5,8 +5,8 @@ import { Connection } from "../../redis/redis.js";
 export const draftVariablelessWorker = new Worker(
   "generate-variableless-draft",
   async (job) => {
-    
     const { userId, professorId, body, accessToken } = job.data;
+    console.log(`[Worker] Starting job ${job.id} - Queue: generate-variableless-draft - User: ${userId}`);
     try {
       const result = await generateDraftEmail({
         userId,
@@ -16,7 +16,8 @@ export const draftVariablelessWorker = new Worker(
       });
       return result;
     } catch (err) {
-      throw new Error("Failed");
+      console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
+      throw err;
     }
   },
   {
@@ -30,17 +31,17 @@ export const draftVariablelessWorker = new Worker(
 );
 
 draftVariablelessWorker.on("completed", (job, result) => {
-  // Add Telemetry Here
+  console.log(`[Worker] Job ${job.id} completed successfully`);
 });
 
 draftVariablelessWorker.on("failed", (job, err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Job ${job?.id} failed - Attempt ${job?.attemptsMade}:`, err.message);
 });
 
-draftVariablelessWorker.on("stalled", (job, err) => {
-  // Add Telemetry Here
+draftVariablelessWorker.on("stalled", (jobId) => {
+  console.warn(`[Worker] Job ${jobId} stalled and will be retried`);
 });
 
 draftVariablelessWorker.on("error", (err) => {
-  // Add Telemetry Here
+  console.error(`[Worker] Internal worker error:`, err);
 });
