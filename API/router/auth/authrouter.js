@@ -536,6 +536,7 @@ router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
 
 router.post("/register/watch", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  console.log(userId)
 
   try {
     const gmail = await configureOAuth({
