@@ -3,6 +3,7 @@ import express from "express";
 import {
   generateEmbeddings,
   verifyToken,
+  verifyServerlessCron
 } from "../../services/authServices.js";
 import { encryptToken } from "../../services/authServices.js";
 import dotenv from "dotenv";
@@ -513,15 +514,12 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 
     return res.status(200).json({ message: "Successfully Completed Profile" });
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
 
-router.post("/register/watch/queue", async (req, res) => {
+router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
   const { watchData } = req.body;
-  //await verifyServerCron()
-  console.log(watchData);
   try {
     const jobs = watchData.map((watch) => ({
       name: "refresh-watch-job",

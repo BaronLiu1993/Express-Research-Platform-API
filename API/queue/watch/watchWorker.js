@@ -14,7 +14,6 @@ async function refreshWatch({ userId }) {
     );
 
     const gmail = await configureOAuth({ userId, supabase });
-    console.log(gmail);
 
     const watchStatus = await gmail.users.watch({
       userId: "me",
@@ -25,7 +24,6 @@ async function refreshWatch({ userId }) {
       },
     });
 
-    console.log(watchStatus);
     const currentTime = new Date().toISOString();
 
     const { error: historyUpdateError } = await supabase
@@ -36,7 +34,6 @@ async function refreshWatch({ userId }) {
       })
       .eq("user_id", userId);
 
-    console.log("fired");
     if (historyUpdateError) {
       throw Error("Failed TO Update History Id");
     }

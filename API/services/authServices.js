@@ -56,13 +56,31 @@ export async function generateEmbeddings(research_input_embeddings) {
   }
 }
 
-export async function verifyServerlessCron(req, res) {
-  const cron_secret = req.headers.cron_secret;
-  if (cron_secret != SUPABASE_CRON_SECRET) {
-    return res.status(403).json({ message: "Unauthorized" });
-  }
+export function verifyServerlessCron(req, res, next) {
+  const provided = req.get("x-cron-secret");
+  const expected = process.env.SUPABASE_CRON_SECRET;
+  try {
+    const tsStr = req.get("x-cron-ts");
+    const ts = Number(tsStr);
+    const now = Math.floor(Date.now() / 1000);
+    const MAX_SKEW = 300;
+    if (!provided || !expected) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
 
-  
+    if (!Number.isFinite(ts) || Math.abs(now - ts) > MAX_SKEW) {
+      return res.status(403).json({ message: "Stale request" });
+    }
+
+    const ok = safeEquals(provided, expected);
+    if (!ok) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    return next();
+  } catch {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
 }
 
 export async function verifyPubSubJwt(req, res) {
