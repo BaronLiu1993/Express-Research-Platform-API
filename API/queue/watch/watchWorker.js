@@ -1,6 +1,49 @@
 import { Worker } from "bullmq";
 import { Connection } from "../../redis/redis.js";
-import { refreshWatch } from "./configureWatch.js";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+import { configureOAuth } from "../../services/googleServices.js";
+
+dotenv.config();
+
+async function refreshWatch({ userId }) {
+  try {
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY
+    );
+
+    const gmail = await configureOAuth({ userId, supabase });
+    console.log(gmail);
+
+    const watchStatus = await gmail.users.watch({
+      userId: "me",
+      requestBody: {
+        topicName: "projects/uoftresearch/topics/research-gmail-topic",
+        labelIds: ["INBOX"],
+        labelFilterBehavior: "include",
+      },
+    });
+
+    console.log(watchStatus);
+    const currentTime = new Date().toISOString();
+
+    const { error: historyUpdateError } = await supabase
+      .from("User_Profiles")
+      .update({
+        history_id: watchStatus.data.historyId,
+        updated_watch: currentTime,
+      })
+      .eq("user_id", userId);
+
+    console.log("fired");
+    if (historyUpdateError) {
+      throw Error("Failed TO Update History Id");
+    }
+  } catch (err) {
+    throw err;
+  }
+}
 
 export const watchWorker = new Worker(
   "refresh-watch",
@@ -10,7 +53,8 @@ export const watchWorker = new Worker(
       `[Worker] Starting job ${job.id} - Queue: generate-variableless-draft - User: ${userId}`
     );
     try {
-      await refreshWatch({ accessToken, userId });
+      await refreshWatch({ userId });
+      console.log("completed job");
     } catch (err) {
       console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
       throw err;

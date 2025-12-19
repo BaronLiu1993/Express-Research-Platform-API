@@ -9,6 +9,7 @@ import "./queue/draft/draftWorker.js";
 import "./queue/variablelessDrafts/variablelessWorker.js"
 import "./queue/sendAttachments/sendAttachmentsWorker.js"
 import "./queue/inbox/inboxWorker.js"
+import "./queue/watch/watchWorker.js"
 
 import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";

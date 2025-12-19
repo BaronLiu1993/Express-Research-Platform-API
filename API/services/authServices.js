@@ -14,6 +14,7 @@ const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
 const SUPABASE_JWT_ALGORITHM = process.env.SUPABASE_JWT_ALGORITHM;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_CRON_SECRET = process.env.SUPABASE_CRON_SECRET;
 
 const secretKey = process.env.GMAIL_SECRET_KEY;
 const client = new OAuth2Client();
@@ -55,12 +56,21 @@ export async function generateEmbeddings(research_input_embeddings) {
   }
 }
 
+export async function verifyServerlessCron(req, res) {
+  const cron_secret = req.headers.cron_secret;
+  if (cron_secret != SUPABASE_CRON_SECRET) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  
+}
+
 export async function verifyPubSubJwt(req, res) {
   const auth = req.headers.authorization || "";
   const m = auth.match(/^Bearer (.+)$/);
   if (!m) {
-    return res.status(401).json({message:"No Service Header"})
-  };
+    return res.status(401).json({ message: "No Service Header" });
+  }
 
   const token = m[1];
   const audience = process.env.PUBSUB_PUSH_AUDIENCE;
@@ -68,12 +78,11 @@ export async function verifyPubSubJwt(req, res) {
   const payload = ticket.getPayload();
 
   if (!payload?.email_verified) {
-    return res.status(401).json({message:"Emailed Not Verfied"})
-  };
+    return res.status(401).json({ message: "Emailed Not Verfied" });
+  }
 
   if (payload.email !== process.env.PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL) {
-    return res.status(401).json({message:"Wrong Service Account"})
-
+    return res.status(401).json({ message: "Wrong Service Account" });
   }
 
   return payload;

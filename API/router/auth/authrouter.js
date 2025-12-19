@@ -520,17 +520,16 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 
 router.post("/register/watch/queue", async (req, res) => {
   const { watchData } = req.body;
+  //await verifyServerCron()
   console.log(watchData);
   try {
-    /**
-     * const jobs = watchData.map((watch) => ({
-      name: "refresh-watch",
+    const jobs = watchData.map((watch) => ({
+      name: "refresh-watch-job",
       data: {
-        userId: watch.userId,
+        userId: watch.user_id,
       },
     }));
     await watchQueue.addBulk(jobs);
-     */
   } catch {
     return res.status(500).json({ message: "internal server error" });
   }
@@ -542,18 +541,20 @@ router.post("/register/watch", verifyToken, async (req, res) => {
     await req.supabaseClient
       .from("User_Profiles")
       .select("finished_registration")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .single();
 
   if (completionError) {
     return res.status(400).json({ message: "Failed To Fetch Data." });
   }
+
 
   if (dataCompletionData.finished_registration === true) {
     return res.status(429).json({ message: "Already Registered." });
   }
 
   try {
-    const gmail = await configureOAuth({ userId, supabase });
+    const gmail = await configureOAuth({ userId, supabase: req.supabaseClient });
 
     const watchStatus = await gmail.users.watch({
       userId: "me",
