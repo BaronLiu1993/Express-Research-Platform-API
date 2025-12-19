@@ -303,10 +303,6 @@ router.get("/check-profile-completed", verifyToken, async (req, res) => {
 
 //Registration Method
 router.post("/register", verifyToken, async (req, res) => {
-  console.log("=== [/register] HIT ===");
-  console.log("[/register] headers.content-type:", req.headers["content-type"]);
-  console.log("[/register] req.body (raw):", req.body);
-
   const {
     student_major,
     student_year,
@@ -314,61 +310,22 @@ router.post("/register", verifyToken, async (req, res) => {
     student_acceptedterms,
   } = req.body;
 
-  console.log("[/register] parsed body:", {
-    student_major,
-    student_year,
-    student_interests,
-    student_acceptedterms,
-  });
-
-  console.log("[/register] req.user:", req.user);
-
-  const userId = req.user?.sub;
-  console.log("[/register] derived userId:", userId);
-
-  console.log(
-    "[/register] Supabase: SELECT User_Profiles.finished_registration WHERE user_id =",
-    userId
-  );
-
+  const userId = req.user.sub;
   const { data: profileData, error: profileError } = await req.supabaseClient
     .from("User_Profiles")
     .select("finished_registration")
     .eq("user_id", userId)
     .single();
 
-  console.log("[/register] Supabase SELECT result:", {
-    profileData,
-    profileError,
-  });
-
   if (profileError) {
-    console.log("[/register] EARLY RETURN: profileError on SELECT");
     return res.status(400).json({ message: "Failed To Fetch" });
   }
 
-  console.log(
-    "[/register] finished_registration value:",
-    profileData?.finished_registration
-  );
-
   if (profileData.finished_registration) {
-    console.log("[/register] EARLY RETURN: user already finished registration");
     return res.status(429).json({
       message: "You can only register Once.",
     });
   }
-
-  // Validation logs
-  console.log("[/register] validation check: required fields present?");
-  console.log("[/register] student_major present:", !!student_major);
-  console.log("[/register] student_year present:", !!student_year);
-  console.log("[/register] student_interests present:", !!student_interests);
-  console.log(
-    "[/register] student_acceptedterms present:",
-    !!student_acceptedterms
-  );
-  console.log("[/register] userId present:", !!userId);
 
   if (
     !student_major ||
@@ -377,110 +334,34 @@ router.post("/register", verifyToken, async (req, res) => {
     !student_acceptedterms ||
     !userId
   ) {
-    console.log("[/register] EARLY RETURN: Incomplete Information", {
-      student_major,
-      student_year,
-      student_interests,
-      student_acceptedterms,
-      userId,
-    });
     return res.status(400).json({ message: "Incomplete Information" });
   }
 
-  console.log("[/register] validation check: interests array shape");
-  console.log("[/register] student_interests type:", typeof student_interests);
-  console.log(
-    "[/register] student_interests isArray:",
-    Array.isArray(student_interests)
-  );
-  console.log(
-    "[/register] student_interests length:",
-    student_interests?.length
-  );
-
-  if (!Array.isArray(student_interests)) {
-    console.log(
-      "[/register] EARLY RETURN: student_interests not an array:",
-      student_interests
-    );
-    return res.status(400).json({ message: "Invalid Interests" });
-  }
-
   if (student_interests.length > 3 || student_interests.length <= 0) {
-    console.log(
-      "[/register] EARLY RETURN: invalid interests length:",
-      student_interests.length
-    );
     return res.status(400).json({ message: "Invalid Interests" });
   }
 
   try {
-    console.log("[/register] === TRY BLOCK START ===");
-
     const research_input_embeddings = student_interests.join();
-    console.log(
-      "[/register] research_input_embeddings:",
-      research_input_embeddings
-    );
-
-    console.log("[/register] calling generateEmbeddings(input)...");
     const embeddings = await generateEmbeddings(research_input_embeddings);
-
-    // embeddings can be large; log a safe preview
-    const embeddingPreview = embeddings?.data?.[0]?.embedding
-      ? {
-          length: embeddings.data[0].embedding.length,
-          first5: embeddings.data[0].embedding.slice(0, 5),
-          last5: embeddings.data[0].embedding.slice(-5),
-        }
-      : null;
-
-    console.log("[/register] generateEmbeddings output (safe):", {
-      hasData: !!embeddings?.data,
-      dataLen: embeddings?.data?.length,
-      embeddingPreview,
-      rawKeys: embeddings ? Object.keys(embeddings) : null,
-    });
-
-    const updatePayload = {
-      student_major: student_major,
-      student_year: student_year,
-      student_interests: student_interests,
-      student_acceptedterms: student_acceptedterms,
-      student_embeddings: embeddings?.data?.[0]?.embedding,
-      finished_registration: true,
-    };
-
-    console.log("[/register] Supabase UPDATE payload (safe):", {
-      ...updatePayload,
-      student_embeddings: embeddingPreview, // show preview instead of full array
-    });
-
-    console.log(
-      "[/register] Supabase: UPDATE User_Profiles WHERE user_id =",
-      userId
-    );
-
-    const { error: updateError } = await req.supabaseClient
+    const { error: profileError } = await req.supabaseClient
       .from("User_Profiles")
-      .update(updatePayload)
+      .update({
+        student_major: student_major,
+        student_year: student_year,
+        student_interests: student_interests,
+        student_acceptedterms: student_acceptedterms,
+        student_embeddings: embeddings.data[0].embedding,
+        finished_registration: true,
+      })
       .eq("user_id", userId);
 
-    console.log("[/register] Supabase UPDATE result:", { updateError });
-
-    if (updateError) {
-      console.log("[/register] EARLY RETURN: Failed To Update", updateError);
+    if (profileError) {
       return res.status(400).json({ message: "Failed To Update" });
     }
-
-    console.log("[/register] SUCCESS: profile completed for userId:", userId);
     return res.status(200).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
-    console.log("[/register] CATCH ERROR:", err);
-    console.log("[/register] CATCH ERROR (stack):", err?.stack);
     return res.status(500).json({ message: "Internal server error" });
-  } finally {
-    console.log("=== [/register] END ===");
   }
 });
 
@@ -655,20 +536,6 @@ router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
 
 router.post("/register/watch", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const { data: dataCompletionData, error: completionError } =
-    await req.supabaseClient
-      .from("User_Profiles")
-      .select("finished_registration")
-      .eq("user_id", userId)
-      .single();
-
-  if (completionError) {
-    return res.status(400).json({ message: "Failed To Fetch Data." });
-  }
-
-  if (dataCompletionData.finished_registration === true) {
-    return res.status(429).json({ message: "Already Registered." });
-  }
 
   try {
     const gmail = await configureOAuth({
@@ -700,6 +567,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
 
     return res.status(200).json({ message: "success" });
   } catch (err) {
+    console.log(err);
     return res.status(500).json({ message: "internal server error" });
   }
 });
