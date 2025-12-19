@@ -520,14 +520,17 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 
 router.post("/register/watch/queue", async (req, res) => {
   const { watchData } = req.body;
+  console.log(watchData);
   try {
-    const jobs = watchData.map((watch) => ({
+    /**
+     * const jobs = watchData.map((watch) => ({
       name: "refresh-watch",
       data: {
         userId: watch.userId,
       },
     }));
     await watchQueue.addBulk(jobs);
+     */
   } catch {
     return res.status(500).json({ message: "internal server error" });
   }
