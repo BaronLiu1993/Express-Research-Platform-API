@@ -316,6 +316,7 @@ router.post("/register", verifyToken, async (req, res) => {
     .select("finished_registration")
     .eq("user_id", userId)
     .single();
+
   if (profileError) {
     return res.status(400).json({ message: "Failed To Fetch" });
   }
@@ -360,6 +361,7 @@ router.post("/register", verifyToken, async (req, res) => {
     }
     return res.status(200).json({ message: "Sucessfully Completed Profile" });
   } catch (err) {
+    console.log(err)
     return res.status(500).json({ message: "Internal server error" });
   }
 });
