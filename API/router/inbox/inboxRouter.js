@@ -31,12 +31,9 @@ router.post("/mail-webhook", async (req, res) => {
     const pubSubData = JSON.parse(decoded);
     console.log("Parsed pubSubData:", pubSubData);
 
-    await inboxQueue.add({
-      name: "inbox-sync",
-      data: {
-        historyId: pubSubData.historyId,
-        email: pubSubData.emailAddress,
-      },
+    await inboxQueue.add("inbox-sync", {
+      historyId: pubSubData.historyId,
+      email: pubSubData.emailAddress,
     });
 
     console.log("✅ Job added to queue");
@@ -47,7 +44,6 @@ router.post("/mail-webhook", async (req, res) => {
     return res.status(500).json({ message: "internal server error" });
   }
 });
-
 
 router.post("/seen", verifyToken, async (req, res) => {
   const threadId = req.query.threadId;
