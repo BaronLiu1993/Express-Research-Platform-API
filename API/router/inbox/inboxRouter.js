@@ -13,7 +13,9 @@ const router = express.Router();
 
 router.post("/mail-webhook", async (req, res) => {
   //await verifyPubSubJwt(req, res); 
+  console.log("fired")
   const message = req.body.message;
+
   try {
     const pubSubData = JSON.parse(Buffer.from(message.data, "base64").toString());
     await inboxQueue.add({
