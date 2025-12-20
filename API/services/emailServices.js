@@ -161,7 +161,7 @@ export async function sendSnippetEmail({
   userName,
   body,
   accessToken,
-  labelId
+  labelId,
 }) {
   if (
     !userId ||
@@ -238,13 +238,10 @@ export async function sendSnippetEmail({
       requestBody: { message: { raw } },
     });
 
-    
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
     });
-
-   
 
     const { error: deletionError } = await supabase
       .from("Emails")
@@ -255,12 +252,10 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Delete");
     }
 
-    const { error: trackInsertionError } = await supabase
-      .from("Track")
-      .insert({
-        user_id: userId,
-        thread_id: sendResponse.data.threadId,
-      });
+    const { error: trackInsertionError } = await supabase.from("Track").insert({
+      user_id: userId,
+      thread_id: sendResponse.data.threadId,
+    });
 
     const { error: messageInsertionError } = await supabase
       .from("Messages")
@@ -274,6 +269,7 @@ export async function sendSnippetEmail({
         name: body.professorName,
         email: body.professorEmail,
         identifier_id: sendResponse.data.id,
+        unread: true,
       });
 
     if (messageInsertionError || trackInsertionError) {
@@ -286,14 +282,13 @@ export async function sendSnippetEmail({
   }
 }
 
-
 export async function sendSnippetEmailWithAttachments({
   userId,
   userEmail,
   userName,
   body,
   accessToken,
-  labelId
+  labelId,
 }) {
   if (
     !userId ||
@@ -301,7 +296,7 @@ export async function sendSnippetEmailWithAttachments({
     !userName ||
     !body?.professorId ||
     !body?.professorEmail ||
-    !accessToken || 
+    !accessToken ||
     !labelId
   ) {
     throw new Error("Missing required inputs");
@@ -432,12 +427,10 @@ export async function sendSnippetEmailWithAttachments({
       throw new Error("Failed to Delete");
     }
 
-    const { error: trackInsertionError } = await supabase
-      .from("Track")
-      .insert({
-        user_id: userId,
-        thread_id: sendResponse.data.threadId,
-      });
+    const { error: trackInsertionError } = await supabase.from("Track").insert({
+      user_id: userId,
+      thread_id: sendResponse.data.threadId,
+    });
 
     const { error: messageInsertionError } = await supabase
       .from("Messages")
@@ -451,6 +444,7 @@ export async function sendSnippetEmailWithAttachments({
         name: body.professorName,
         email: body.professorEmail,
         identifier_id: sendResponse.data.id,
+        unread: true,
       });
 
     if (messageInsertionError || trackInsertionError) {
@@ -485,7 +479,6 @@ export async function sendReply({
       },
     });
 
-
     // Configure Gmail OAuth
     const gmail = await configureOAuth({ userId, supabase });
 
@@ -495,9 +488,9 @@ export async function sendReply({
       id: messageId,
       format: "full",
     });
-  
-    const replyId = await getHeader(message.data.payload.headers, 'Message-Id')
-  
+
+    const replyId = await getHeader(message.data.payload.headers, "Message-Id");
+
     const raw = await makeReplyBody({
       to: professorEmail,
       from: userEmail,
@@ -536,13 +529,11 @@ export async function sendReply({
       throw new Error("Failed to Insert into Database");
     }
 
-
     return { message: "Successfully Sent!", success: true };
   } catch (error) {
     return { message: "Internal Server Error", success: false };
   }
 }
-
 
 export async function sendEmailWithAttachments({
   userId,
