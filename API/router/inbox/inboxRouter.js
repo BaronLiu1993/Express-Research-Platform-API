@@ -18,6 +18,7 @@ router.post("/mail-webhook", async (req, res) => {
 
   try {
     const pubSubData = JSON.parse(Buffer.from(message.data, "base64").toString());
+    console.log(pubSubData)
     await inboxQueue.add({
       name: "inbox-sync",
       data: {
