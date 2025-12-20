@@ -41,7 +41,7 @@ async function updateInbox({ historyId, email }) {
       startHistoryId: historyIdData.history_id,
     });
 
-    const threadIdSet = new Set<string>();
+    const threadIdSet = new Set();
 
     if (result.data.history) {
       for (const msg of result.data.history) {
