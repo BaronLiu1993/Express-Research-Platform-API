@@ -21,7 +21,7 @@ async function updateInbox({ historyId, email }) {
 
     const gmail = await configureOAuth({
       userId: userDataId.user_id,
-      supabase,
+      supabase: supabase,
     });
 
     const { data: historyIdData, error: historyIdFetchError } = await supabase

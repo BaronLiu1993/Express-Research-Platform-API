@@ -37,9 +37,13 @@ router.post("/mail-webhook", async (req, res) => {
         historyId: pubSubData.historyId,
         email: pubSubData.emailAddress,
       },
-      { jobId: pubSubData.emailAddress }
+      {
+        jobId: pubSubData.emailAddress,
+        removeOnComplete: true,
+        removeOnFail: true,
+      }
     );
-    console.log(response)
+    console.log(response);
 
     console.log("✅ Job added to queue");
 
