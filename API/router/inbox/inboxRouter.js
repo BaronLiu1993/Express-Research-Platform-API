@@ -11,27 +11,43 @@ dotenv.config();
 
 const router = express.Router();
 
-router.post("/mail-webhook", async (req, res) => {
-  //await verifyPubSubJwt(req, res); 
-  console.log("fired")
-  const message = req.body.message;
+queueRouter.post("/mail-webhook", async (req, res) => {
+  console.log("🔥 /mail-webhook HIT");
+  console.log("Headers:", req.headers);
+  console.log("Body:", req.body);
+
+  const message = req.body?.message;
+  console.log("Message:", message);
+
+  if (!message?.data) {
+    console.log("❌ Missing message.data");
+    return res.status(400).json({ error: "Invalid PubSub payload" });
+  }
 
   try {
-    const pubSubData = JSON.parse(Buffer.from(message.data, "base64").toString());
-    console.log(pubSubData)
+    const decoded = Buffer.from(message.data, "base64").toString();
+    console.log("Decoded base64:", decoded);
+
+    const pubSubData = JSON.parse(decoded);
+    console.log("Parsed pubSubData:", pubSubData);
+
     await inboxQueue.add({
       name: "inbox-sync",
       data: {
-       historyId: pubSubData.historyId,
-       email: pubSubData.emailAddress
+        historyId: pubSubData.historyId,
+        email: pubSubData.emailAddress,
       },
     });
-    
+
+    console.log("✅ Job added to queue");
+
     return res.status(200).json({ message: "Finished Update" });
-  } catch {
+  } catch (err) {
+    console.error("💥 ERROR:", err);
     return res.status(500).json({ message: "internal server error" });
   }
 });
+
 
 router.post("/seen", verifyToken, async (req, res) => {
   const threadId = req.query.threadId;
