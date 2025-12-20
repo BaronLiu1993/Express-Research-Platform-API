@@ -3,18 +3,20 @@ import { Connection } from "../../redis/redis.js";
 import { supabase } from "../../supabase/supabase.js";
 import { configureOAuth } from "../../services/googleServices.js";
 
-async function updateInbox({ historyId, email, res }) {
+async function updateInbox({ historyId, email }) {
   try {
     console.log(`[InboxWorker] Starting update for email: ${email}`);
+
     const { data: userDataId, error: userDataFetchError } = await supabase
       .from("User_Profiles")
       .select("user_id")
       .eq("student_email", email)
       .single();
 
-    if (userDataFetchError) {
-      console.error(`[InboxWorker] Error fetching user profile: ${userDataFetchError.message}`);
-      return res?.status(400).json({ message: "internal server error" });
+    if (userDataFetchError || !userDataId) {
+      throw new Error(
+        `Failed to fetch user profile for ${email}: ${userDataFetchError?.message}`
+      );
     }
 
     const gmail = await configureOAuth({
@@ -28,9 +30,10 @@ async function updateInbox({ historyId, email, res }) {
       .eq("user_id", userDataId.user_id)
       .single();
 
-    if (historyIdFetchError) {
-      console.error(`[InboxWorker] Error fetching history_id: ${historyIdFetchError.message}`);
-      return res?.status(400).json({ message: "internal server error" });
+    if (historyIdFetchError || !historyIdData) {
+      throw new Error(
+        `Failed to fetch history_id for user ${userDataId.user_id}: ${historyIdFetchError?.message}`
+      );
     }
 
     const result = await gmail.users.history.list({
@@ -38,43 +41,47 @@ async function updateInbox({ historyId, email, res }) {
       startHistoryId: historyIdData.history_id,
     });
 
-    const threadIdSet = new Set();
+    const threadIdSet = new Set<string>();
+
     if (result.data.history) {
       for (const msg of result.data.history) {
-        const threadId = msg.messages[0].threadId;
-        threadIdSet.add(threadId);
+        const threadId = msg.messages?.[0]?.threadId;
+        if (threadId) threadIdSet.add(threadId);
       }
     }
 
-    console.log(`[InboxWorker] Found ${threadIdSet.size} unique threads to process for ${email}`);
+    console.log(
+      `[InboxWorker] Found ${threadIdSet.size} unique threads to process for ${email}`
+    );
 
     for (const threadId of threadIdSet) {
-      if (threadId) {
-        const { data, error } = await supabase.rpc("tracked_thread_exists", {
-          p_user_id: userDataId.user_id,
-          p_thread_id: threadId,
-        });
+      const { data, error } = await supabase.rpc("tracked_thread_exists", {
+        p_user_id: userDataId.user_id,
+        p_thread_id: threadId,
+      });
 
-        if (error) {
-          console.error(`[InboxWorker] RPC Error for thread ${threadId}: ${error.message}`);
-          return res?.status(400).json({ message: "internal server error" });
-        }
+      if (error) {
+        throw new Error(
+          `RPC tracked_thread_exists failed for thread ${threadId}: ${error.message}`
+        );
+      }
 
-        if (data === true) {
-          const lastUpdatedAt = new Date().toISOString();
-          const { error: upsertError } = await supabase
-            .from("Messages")
-            .update({
-              sent_at: lastUpdatedAt,
-              unread: true,
-            })
-            .eq("thread_id", threadId)
-            .eq("type", "first");
-          
-          if (upsertError) {
-            console.error(`[InboxWorker] Error updating Message ${threadId}: ${upsertError.message}`);
-            return res?.status(400).json({ message: "internal server error" });
-          }
+      if (data === true) {
+        const lastUpdatedAt = new Date().toISOString();
+
+        const { error: updateError } = await supabase
+          .from("Messages")
+          .update({
+            sent_at: lastUpdatedAt,
+            unread: true,
+          })
+          .eq("thread_id", threadId)
+          .eq("type", "first");
+
+        if (updateError) {
+          throw new Error(
+            `Failed to update Messages for thread ${threadId}: ${updateError.message}`
+          );
         }
       }
     }
@@ -85,25 +92,30 @@ async function updateInbox({ historyId, email, res }) {
       .eq("user_id", userDataId.user_id);
 
     if (historyUpdateError) {
-      console.error(`[InboxWorker] Error updating final history_id: ${historyUpdateError.message}`);
-      return res?.status(400).json({ message: "internal server error" });
+      throw new Error(
+        `Failed to update final history_id for user ${userDataId.user_id}: ${historyUpdateError.message}`
+      );
     }
+
+    console.log(`[InboxWorker] Successfully updated inbox for ${email}`);
   } catch (err) {
-    console.error(`[InboxWorker] Unhandled exception:`, err);
-    return res?.status(500).json({ message: "internal server error" });
+    console.error(`[InboxWorker] Unhandled exception`, err);
+    throw err; 
   }
 }
+
 
 export const inboxWorker = new Worker(
   "inbox-sync",
   async (job) => {
-    const { historyId, email, res } = job.data;
-    console.log(`[Worker] Starting job ${job.id} - Queue: inbox-sync - Email: ${email}`);
+    const { historyId, email } = job.data;
+    console.log(
+      `[Worker] Starting job ${job.id} - Queue: inbox-sync - Email: ${email}`
+    );
     try {
       await updateInbox({
         historyId,
         email,
-        res,
       });
     } catch (err) {
       console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
@@ -125,7 +137,10 @@ inboxWorker.on("completed", (job) => {
 });
 
 inboxWorker.on("failed", (job, err) => {
-  console.error(`[Worker] Job ${job?.id} failed - Attempt ${job?.attemptsMade}:`, err.message);
+  console.error(
+    `[Worker] Job ${job?.id} failed - Attempt ${job?.attemptsMade}:`,
+    err.message
+  );
 });
 
 inboxWorker.on("stalled", (jobId) => {
