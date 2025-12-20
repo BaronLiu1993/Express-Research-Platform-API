@@ -11,7 +11,7 @@ dotenv.config();
 
 const router = express.Router();
 
-queueRouter.post("/mail-webhook", async (req, res) => {
+router.post("/mail-webhook", async (req, res) => {
   console.log("🔥 /mail-webhook HIT");
   console.log("Headers:", req.headers);
   console.log("Body:", req.body);
