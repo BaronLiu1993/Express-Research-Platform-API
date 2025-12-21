@@ -39,6 +39,8 @@ async function updateInbox({ historyId, email }) {
     const result = await gmail.users.history.list({
       userId: "me",
       startHistoryId: historyIdData.history_id,
+      historyTypes: ["messageAdded", "labelAdded"],
+      maxResults: 500,
     });
 
     const threadIdSet = new Set();
@@ -54,37 +56,104 @@ async function updateInbox({ historyId, email }) {
       `[InboxWorker] Found ${threadIdSet.size} unique threads to process for ${email}`
     );
 
-    for (const threadId of threadIdSet) {
-      const { data, error } = await supabase.rpc("tracked_thread_exists", {
-        p_user_id: userDataId.user_id,
-        p_thread_id: threadId,
-      });
+    let i = 0;
 
-      if (error) {
+    for (const threadId of threadIdSet) {
+      i++;
+
+      console.log(
+        `\n[InboxWorker] (#${i}/${threadIdSet.size}) Processing threadId=${threadId} user=${userDataId.user_id}`
+      );
+
+      const rpcStarted = Date.now();
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        "tracked_thread_exists",
+        {
+          p_user_id: userDataId.user_id,
+          p_thread_id: threadId,
+        }
+      );
+      console.log(
+        `[InboxWorker] RPC tracked_thread_exists finished in ${Date.now() - rpcStarted}ms`
+      );
+
+      if (rpcError) {
+        console.error(
+          `[InboxWorker] RPC ERROR threadId=${threadId}:`,
+          rpcError
+        );
         throw new Error(
-          `RPC tracked_thread_exists failed for thread ${threadId}: ${error.message}`
+          `RPC tracked_thread_exists failed for thread ${threadId}: ${rpcError.message}`
         );
       }
 
-      if (data === true) {
-        const lastUpdatedAt = new Date().toISOString();
+      console.log(
+        `[InboxWorker] RPC RESULT threadId=${threadId}:`,
+        rpcData,
+        `(type=${typeof rpcData})`
+      );
 
-        const { error: updateError } = await supabase
-          .from("Messages")
-          .update({
-            sent_at: lastUpdatedAt,
-            unread: true,
-          })
-          .eq("thread_id", threadId)
-          .eq("type", "first");
+      const exists =
+        rpcData === true ||
+        rpcData === "true" ||
+        rpcData === "t" ||
+        rpcData === 1 ||
+        rpcData?.exists === true ||
+        rpcData?.tracked_thread_exists === true;
 
-        if (updateError) {
-          throw new Error(
-            `Failed to update Messages for thread ${threadId}: ${updateError.message}`
-          );
-        }
+      if (!exists) {
+        console.log(
+          `[InboxWorker] SKIP threadId=${threadId} because exists=false (raw=${JSON.stringify(
+            rpcData
+          )})`
+        );
+        continue;
+      }
+
+      const lastUpdatedAt = new Date().toISOString();
+      console.log(
+        `[InboxWorker] Updating Messages for threadId=${threadId} lastUpdatedAt=${lastUpdatedAt}`
+      );
+
+      const updateStarted = Date.now();
+      const { data: updatedRows, error: updateError } = await supabase
+        .from("Messages")
+        .update({
+          sent_at: lastUpdatedAt,
+          unread: true,
+        })
+        .eq("thread_id", threadId)
+        .eq("type", "first")
+        .select("id, thread_id, type, sent_at, unread"); 
+
+      console.log(
+        `[InboxWorker] Messages.update finished in ${Date.now() - updateStarted}ms`
+      );
+
+      if (updateError) {
+        console.error(
+          `[InboxWorker] UPDATE ERROR threadId=${threadId}:`,
+          updateError
+        );
+        throw new Error(
+          `Failed to update Messages for thread ${threadId}: ${updateError.message}`
+        );
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        console.warn(
+          `[InboxWorker] UPDATE MATCHED 0 ROWS threadId=${threadId}. Likely your WHERE clause doesn't match. ` +
+            `Check Messages.thread_id and Messages.type ("first").`
+        );
+      } else {
+        console.log(
+          `[InboxWorker] UPDATED ${updatedRows.length} ROW(S) threadId=${threadId}:`,
+          updatedRows
+        );
       }
     }
+
+    console.log(`[InboxWorker] Done processing ${threadIdSet.size} threads.`);
 
     const { error: historyUpdateError } = await supabase
       .from("User_Profiles")
@@ -100,10 +169,9 @@ async function updateInbox({ historyId, email }) {
     console.log(`[InboxWorker] Successfully updated inbox for ${email}`);
   } catch (err) {
     console.error(`[InboxWorker] Unhandled exception`, err);
-    throw err; 
+    throw err;
   }
 }
-
 
 export const inboxWorker = new Worker(
   "inbox-sync",
