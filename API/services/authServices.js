@@ -14,7 +14,6 @@ const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
 const SUPABASE_JWT_ALGORITHM = process.env.SUPABASE_JWT_ALGORITHM;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const SUPABASE_CRON_SECRET = process.env.SUPABASE_CRON_SECRET;
 
 const secretKey = process.env.GMAIL_SECRET_KEY;
 const client = new OAuth2Client();

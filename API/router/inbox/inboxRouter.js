@@ -15,6 +15,7 @@ router.post("/mail-webhook", async (req, res) => {
   console.log("/mail-webhook HIT");
   console.log("Headers:", req.headers);
   console.log("Body:", req.body);
+  await verifyPubSubJwt(req, res)
 
   const message = req.body?.message;
   console.log("Message:", message);
