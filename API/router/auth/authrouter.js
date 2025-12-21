@@ -353,6 +353,7 @@ router.post("/register", verifyToken, async (req, res) => {
         student_acceptedterms: student_acceptedterms,
         student_embeddings: embeddings.data[0].embedding,
         finished_registration: true,
+        label_id: "Label_3",
       })
       .eq("user_id", userId);
 
@@ -553,12 +554,24 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
+    const newLabel = await gmail.users.labels.create({
+      userId: "me",
+      requestBody: {
+        name: "[Outreach]",
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
+      },
+    });
+
+    const outreachLabelId = newLabel.data.id;
+
     const currentTime = new Date().toISOString();
     const { error: historyUpdateError } = await req.supabaseClient
       .from("User_Profiles")
       .update({
         history_id: watchStatus.data.historyId,
         updated_watch: currentTime,
+        label_id: outreachLabelId,
       })
       .eq("user_id", userId);
 

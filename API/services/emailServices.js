@@ -243,6 +243,14 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
+    await gmail.users.threads.modify({
+      userId: "me",
+      id: sendResponse.data.id,
+      requestBody: {
+        addLabelIds: [labelId],
+      },
+    });
+
     const { error: deletionError } = await supabase
       .from("Emails")
       .delete()
@@ -416,6 +424,14 @@ export async function sendSnippetEmailWithAttachments({
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
+    });
+
+    await gmail.users.threads.modify({
+      userId: "me",
+      id: sendResponse.data.id,
+      requestBody: {
+        addLabelIds: [labelId],
+      },
     });
 
     const { error: deletionError } = await supabase
@@ -671,6 +687,14 @@ export async function sendEmailWithAttachments({
     const sendResponse = await gmail.users.drafts.send({
       userId: "me",
       requestBody: { id: draftData.draft_id },
+    });
+
+    await gmail.users.threads.modify({
+      userId: "me",
+      id: sendResponse.data.id,
+      requestBody: {
+        addLabelIds: [labelId],
+      },
     });
 
     const { error: deletionError } = await supabase
