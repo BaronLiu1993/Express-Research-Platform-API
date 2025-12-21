@@ -31,18 +31,18 @@ router.post("/mail-webhook", async (req, res) => {
     const pubSubData = JSON.parse(decoded);
     console.log("Parsed pubSubData:", pubSubData);
 
-    const response = await inboxQueue.add(
-      "inbox-sync",
-      {
-        historyId: pubSubData.historyId,
-        email: pubSubData.emailAddress,
-      },
-      {
+    const response = await inboxQueue.add("inbox-sync", {
+      historyId: pubSubData.historyId,
+      email: pubSubData.emailAddress,
+    });
+
+    /**
+     * {
         jobId: pubSubData.emailAddress,
         removeOnComplete: true,
         removeOnFail: true,
       }
-    );
+     */
     console.log(response);
 
     console.log("✅ Job added to queue");
