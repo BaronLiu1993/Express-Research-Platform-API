@@ -12,7 +12,7 @@ dotenv.config();
 const router = express.Router();
 
 router.post("/mail-webhook", async (req, res) => {
-  console.log("🔥 /mail-webhook HIT");
+  console.log("/mail-webhook HIT");
   console.log("Headers:", req.headers);
   console.log("Body:", req.body);
 
@@ -20,7 +20,7 @@ router.post("/mail-webhook", async (req, res) => {
   console.log("Message:", message);
 
   if (!message?.data) {
-    console.log("❌ Missing message.data");
+    console.log("Missing message.data");
     return res.status(400).json({ error: "Invalid PubSub payload" });
   }
 
@@ -43,13 +43,12 @@ router.post("/mail-webhook", async (req, res) => {
         removeOnFail: true,
       }
      */
-    console.log(response);
 
-    console.log("✅ Job added to queue");
+    console.log("Job added to queue");
 
     return res.status(200).json({ message: "Finished Update" });
   } catch (err) {
-    console.error("💥 ERROR:", err);
+    console.error("ERROR:", err);
     return res.status(500).json({ message: "internal server error" });
   }
 });
