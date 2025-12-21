@@ -45,7 +45,7 @@ async function refreshWatch({ userId }) {
 export const watchWorker = new Worker(
   "refresh-watch",
   async (job) => {
-    const { userId, accessToken } = job.data;
+    const { userId } = job.data;
     console.log(
       `[Worker] Starting job ${job.id} - Queue: generate-variableless-draft - User: ${userId}`
     );

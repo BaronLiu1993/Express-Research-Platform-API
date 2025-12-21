@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { createClient } from "@supabase/supabase-js";
 import CryptoJS from "crypto-js";
 import { OAuth2Client } from "google-auth-library";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -21,6 +22,17 @@ const client = new OAuth2Client();
 const OPEN_AI = new OpenAI({
   apiKey: OPENAI_KEY,
 });
+
+function safeEquals(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+
+  if (aBuf.length !== bBuf.length) return false;
+
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
 
 export function encryptToken(token) {
   try {
@@ -55,11 +67,11 @@ export async function generateEmbeddings(research_input_embeddings) {
   }
 }
 
-export function verifyServerlessCron(req, res, next) {
+export async function verifyServerlessCron(req, res, next) {
   const provided = req.get("x-cron-secret");
+  const tsStr = req.get("x-cron-ts");
   const expected = process.env.SUPABASE_CRON_SECRET;
   try {
-    const tsStr = req.get("x-cron-ts");
     const ts = Number(tsStr);
     const now = Math.floor(Date.now() / 1000);
     const MAX_SKEW = 300;
@@ -70,7 +82,6 @@ export function verifyServerlessCron(req, res, next) {
     if (!Number.isFinite(ts) || Math.abs(now - ts) > MAX_SKEW) {
       return res.status(403).json({ message: "Stale request" });
     }
-
     const ok = safeEquals(provided, expected);
     if (!ok) {
       return res.status(403).json({ message: "Unauthorized" });

@@ -523,6 +523,11 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
   const { watchData } = req.body;
   try {
+    if (watchData.length <= 0) {
+      return res.status(200).json({ message: "Nothing to queue" });
+    }
+
+    console.log(watchData);
     const jobs = watchData.map((watch) => ({
       name: "refresh-watch-job",
       data: {
@@ -530,6 +535,7 @@ router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
       },
     }));
     await watchQueue.addBulk(jobs);
+    return res.status(200).json({ message: "Queued" });
   } catch {
     return res.status(500).json({ message: "internal server error" });
   }
