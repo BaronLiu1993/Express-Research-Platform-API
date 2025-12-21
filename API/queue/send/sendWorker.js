@@ -6,6 +6,7 @@ export const sendWorker = new Worker(
   "send-email",
   async (job) => {
     const { userId, userEmail, userName, body, accessToken, labelId } = job.data;
+    console.log(job.data)
     console.log(`[Worker] Processing job ${job.id} for user: ${userEmail}`);
     try {
       const result = await sendSnippetEmail({
