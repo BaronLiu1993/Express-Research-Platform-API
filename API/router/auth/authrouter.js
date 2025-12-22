@@ -20,6 +20,8 @@ const scopes = [
   "profile",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.labels",
 ];
 
 router.get("/signup-with-google", async (req, res) => {
@@ -559,6 +561,8 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
+    console.log(watchStatus);
+
     const newLabel = await gmail.users.labels.create({
       userId: "me",
       requestBody: {
@@ -567,6 +571,8 @@ router.post("/register/watch", verifyToken, async (req, res) => {
         messageListVisibility: "show",
       },
     });
+
+    console.log(newLabel);
 
     const outreachLabelId = newLabel.data.id;
 
@@ -580,6 +586,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       })
       .eq("user_id", userId);
 
+    console.log(historyUpdateError);
     if (historyUpdateError) {
       return res.status(400).json({ message: "Failed to update history" });
     }
