@@ -243,6 +243,8 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
+    console.log(sendResponse.data.threadId)
+    console.log(labelId)
     const labelResponse = await gmail.users.threads.modify({
       userId: "me",
       id: sendResponse.data.threadId, 
@@ -250,6 +252,10 @@ export async function sendSnippetEmail({
         addLabelIds: [labelId],
       },
     });
+
+    console.log(labelResponse)
+
+
 
     const { error: deletionError } = await supabase
       .from("Emails")
