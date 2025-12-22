@@ -243,9 +243,9 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
-    await gmail.users.threads.modify({
+    const labelResponse = await gmail.users.threads.modify({
       userId: "me",
-      id: sendResponse.data.id,
+      id: sendResponse.data.threadId, 
       requestBody: {
         addLabelIds: [labelId],
       },
@@ -426,9 +426,9 @@ export async function sendSnippetEmailWithAttachments({
       requestBody: { id: draftData.draft_id },
     });
 
-    await gmail.users.threads.modify({
+    const labelResponse = await gmail.users.threads.modify({
       userId: "me",
-      id: sendResponse.data.id,
+      id: sendResponse.data.threadId, 
       requestBody: {
         addLabelIds: [labelId],
       },
