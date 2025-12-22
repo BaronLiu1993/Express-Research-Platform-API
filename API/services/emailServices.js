@@ -243,6 +243,8 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
+    console.log(sendResponse)
+
     const { error: deletionError } = await supabase
       .from("Emails")
       .delete()
@@ -276,27 +278,17 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Insert into Database");
     }
 
-    console.log(sendResponse.data.threadId);
-    console.log(labelId);
-    try {
-      const res = await gmail.users.messages.modify({
-        userId: "me",
-        id: sendResponse.data.id,
-        requestBody: { addLabelIds: [labelId] },
-      });
-
-      console.log("status:", res.status);
-      console.log("data:", res.data);
-      console.log("labels:", res.data.labelIds);
-    } catch (e) {
-      console.error("FAILED status:", e?.response?.status);
-      console.error("FAILED data:", e?.response?.data);
-      console.error("FAILED message:", e?.message);
-    }
+    const labelResponse = await gmail.users.messages.modify({
+      userId: "me",
+      id: sendResponse.data.id,
+      requestBody: {
+        addLabelIds: [labelId],
+      },
+    });
 
     return { message: "Successfully Sent!" };
   } catch (err) {
-    console.log(err);
+    console.log(err)
     return { message: "Internal Server Error" };
   }
 }
