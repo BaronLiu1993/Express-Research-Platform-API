@@ -520,7 +520,7 @@ router.post("/update-profile", verifyToken, async (req, res) => {
   }
 });
 
-router.post("/register/watch/queue", async (req, res) => {
+router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
   const { watchData } = req.body;
   try {
     if (watchData.length <= 0) {
