@@ -24,6 +24,8 @@ async function refreshWatch({ userId }) {
       },
     });
 
+    console.log(watchStatus)
+
     const currentTime = new Date().toISOString();
 
     const { error: historyUpdateError } = await supabase
