@@ -35,10 +35,10 @@ async function updateInbox({ historyId, email }) {
         `Failed to fetch history_id for user ${userDataId.user_id}: ${historyIdFetchError?.message}`
       );
     }
-
+    
     const result = await gmail.users.history.list({
       userId: "me",
-      startHistoryId: historyIdData.history_id,
+      startHistoryId: historyId,
       historyTypes: ["messageAdded", "labelAdded"],
       maxResults: 500,
     });
