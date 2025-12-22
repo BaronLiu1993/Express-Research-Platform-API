@@ -6,7 +6,6 @@ export const sendAttachmentsWorker = new Worker(
   "send-attachments-email",
   async (job) => {
     const { userId, userEmail, userName, body, accessToken, labelId } = job.data;
-    console.log(job.data)
     console.log(`[Worker] Starting job ${job.id} - Queue: send-attachments-email - User: ${userEmail}`);
     try {
       const result = await sendSnippetEmailWithAttachments({

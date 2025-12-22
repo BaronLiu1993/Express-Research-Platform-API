@@ -6,7 +6,6 @@ export const draftVariablelessWorker = new Worker(
   "generate-variableless-draft",
   async (job) => {
     const { userId, professorId, body, accessToken } = job.data;
-    console.log(job.data)
     console.log(`[Worker] Starting job ${job.id} - Queue: generate-variableless-draft - User: ${userId}`);
     try {
       const result = await generateDraftEmail({
