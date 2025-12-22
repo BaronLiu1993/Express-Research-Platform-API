@@ -24,7 +24,6 @@ async function refreshWatch({ userId }) {
       },
     });
 
-    console.log(watchStatus)
 
     const currentTime = new Date().toISOString();
 
@@ -49,7 +48,7 @@ export const watchWorker = new Worker(
   async (job) => {
     const { userId } = job.data;
     console.log(
-      `[Worker] Starting job ${job.id} - Queue: generate-variableless-draft - User: ${userId}`
+      `[Worker] Starting job ${job.id} - Queue: Watch Refresh - User: ${userId}`
     );
     try {
       await refreshWatch({ userId });
