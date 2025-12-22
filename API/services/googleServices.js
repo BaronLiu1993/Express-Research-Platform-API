@@ -29,9 +29,6 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
       .eq("user_id", userId)
       .single();
 
-    console.log(tokenData.gmail_auth_token);
-    console.log(tokenData.gmail_refresh_token);
-
     if (tokenError || !tokenData) {
       throw new Error("No tokens found for user");
     }
@@ -49,12 +46,11 @@ export async function configureOAuth({ userId, supabase, fetchDrive = false }) {
     });
 
     const accessTokenResponse = await oauth2Client.getAccessToken();
-    console.log(accessTokenResponse);
 
     const newAccessToken = accessTokenResponse.token;
 
     const encryptedAccessToken = encryptToken(newAccessToken);
-    
+
     const { error: tokenInsertionError } = await supabase
       .from("User_Profiles")
       .update({ gmail_auth_token: encryptedAccessToken })
