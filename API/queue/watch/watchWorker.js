@@ -51,7 +51,7 @@ export const watchWorker = new Worker(
     );
     try {
       await refreshWatch({ userId });
-      console.log("completed job");
+      console.log("Completed Job");
     } catch (err) {
       console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
       throw err;

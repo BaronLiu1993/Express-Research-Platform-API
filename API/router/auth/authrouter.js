@@ -545,7 +545,6 @@ router.post("/register/watch", verifyToken, async (req, res) => {
   const userId = req.user.sub;
 
   try {
-    // trace configureOAuth to see where errors happen sometimes
     const gmail = await configureOAuth({
       userId,
       supabase: req.supabaseClient,
