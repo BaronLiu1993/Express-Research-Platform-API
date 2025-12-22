@@ -572,7 +572,8 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
-    console.log(newLabel);
+    console.log(newLabel)
+
 
     const outreachLabelId = newLabel.data.id;
 
@@ -586,7 +587,6 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       })
       .eq("user_id", userId);
 
-    console.log(historyUpdateError);
     if (historyUpdateError) {
       return res.status(400).json({ message: "Failed to update history" });
     }

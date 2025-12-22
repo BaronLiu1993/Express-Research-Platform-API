@@ -243,7 +243,7 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
-    console.log(sendResponse)
+    console.log(sendResponse);
 
     const { error: deletionError } = await supabase
       .from("Emails")
@@ -288,7 +288,7 @@ export async function sendSnippetEmail({
 
     return { message: "Successfully Sent!" };
   } catch (err) {
-    console.log(err)
+    console.log(err);
     return { message: "Internal Server Error" };
   }
 }
