@@ -30,7 +30,7 @@ router.get("/signup-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "https://paletteprod.vercel.app/account/register",
+          redirectTo: "https://trypalette.app/account/register",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -57,7 +57,7 @@ router.get("/signin-with-google", async (req, res) => {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: "https://paletteprod.vercel.app/account/login",
+          redirectTo: "https://trypalette.app/account/login",
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
@@ -76,7 +76,6 @@ router.get("/signin-with-google", async (req, res) => {
   }
 });
 
-//login
 router.post("/oauth2callback/login", async (req, res) => {
   const code = req.body.code;
 
