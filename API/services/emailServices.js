@@ -300,6 +300,8 @@ export async function sendSnippetEmailWithAttachments({
   body,
   accessToken,
   labelId,
+  sendResume,
+  sendTranscript,
 }) {
   if (
     !userId ||
@@ -338,9 +340,21 @@ export async function sendSnippetEmailWithAttachments({
       throw new Error("Failed To Find File.");
     }
 
+    if (!sendResume && !sendTranscript) {
+      throw new Error("Must send resume, transcript, or both.");
+    }
+
+    if (sendResume && !(fileData.resume && fileData.resume_path)) {
+      throw new Error("Resume selected but not found.");
+    }
+
+    if (sendTranscript && !(fileData.transcript && fileData.transcript_path)) {
+      throw new Error("Transcript selected but not found.");
+    }
+
     const attachments = [];
 
-    if (fileData.resume && fileData.resume_path) {
+    if (fileData.resume && fileData.resume_path && sendResume) {
       try {
         const body = await generateGetPresignedURL({
           fileType: "resume",
@@ -357,7 +371,7 @@ export async function sendSnippetEmailWithAttachments({
       }
     }
 
-    if (fileData.transcript && fileData.transcript_path) {
+    if (fileData.transcript && fileData.transcript_path && sendTranscript) {
       try {
         const body = await generateGetPresignedURL({
           fileType: "transcript",

@@ -98,10 +98,34 @@ router.post("/send-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/send-attachments-draft", verifyToken, async (req, res) => {
-  const { userEmail, userName, professorData, labelId } = req.body;
+  const {
+    userEmail,
+    userName,
+    professorData,
+    labelId,
+    sendResume,
+    sendTranscript,
+  } = req.body;
   if (professorData.length > 5) {
     res.status(400).json({ message: "Queueing Too Many Emails" });
   }
+
+  console.log(sendResume)
+  console.log(sendTranscript)
+
+  if (
+    !userEmail ||
+    !userName ||
+    !professorData ||
+    !labelId ||
+    typeof sendResume !== "boolean" ||
+    typeof sendTranscript !== "boolean"
+  ) {
+    return res.status(400).json({
+      message: "Missing or invalid required fields",
+    });
+  }
+
   const userId = req.user.sub;
   try {
     const jobs = professorData.map((professor) => ({
@@ -112,6 +136,8 @@ router.post("/send-attachments-draft", verifyToken, async (req, res) => {
         userName,
         accessToken: req.token,
         labelId,
+        sendResume,
+        sendTranscript,
         body: {
           professorId: professor.professor_id,
           professorEmail: professor.email,
