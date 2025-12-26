@@ -18,10 +18,7 @@ const router = express.Router();
 const scopes = [
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/gmail.labels",
 ];
 
 router.get("/signup-with-google", async (req, res) => {
