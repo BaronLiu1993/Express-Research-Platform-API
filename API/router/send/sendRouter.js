@@ -15,7 +15,7 @@ router.post("/create-draft", verifyToken, async (req, res) => {
   if (professorData.length > 5) {
     res.status(400).json({ message: "Queueing Too Many" });
   }
-  
+
   const userId = req.user.sub;
   try {
     const jobs = professorData.map((professor) => ({
@@ -71,6 +71,7 @@ router.post("/create-variableless-draft", verifyToken, async (req, res) => {
 
 router.post("/send-draft", verifyToken, async (req, res) => {
   const { userEmail, userName, professorData, labelId } = req.body;
+  
   if (professorData.length > 5) {
     res.status(400).json({ message: "Queueing Too Many Emails" });
   }

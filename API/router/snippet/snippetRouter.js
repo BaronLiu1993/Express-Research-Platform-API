@@ -2,6 +2,7 @@ import express from "express";
 import { verifyToken } from "../../services/authServices.js";
 import { v4 as uuidv4 } from "uuid";
 import { AuthIdSchema } from "../../schema/authSchema.js";
+import { SnippetSchema } from "../../schema/snippetSchema.js";
 
 const router = express.Router();
 
@@ -27,7 +28,13 @@ router.post("/insert-snippet", verifyToken, async (req, res) => {
 
   const userId = authParsed.data.sub;
 
-  const { snippet_html, snippet_subject } = req.body;
+  const parsed = SnippetSchema.safeParse(req.body);
+  
+  if (!parsed.success) {
+    return res.status(401).json({ message: "Invalid body" });
+  }
+
+  const { snippet_html, snippet_subject } = parsed.data;
 
   const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
   const identifier = uuidv4();

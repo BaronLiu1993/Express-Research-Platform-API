@@ -13,14 +13,14 @@ const __dirname = path.dirname(__filename);
 router.get("/hi.png", async (req, res) => {
   try {
     const { analyticId } = req.query;
-    const decryptedAnalyticId = decryptToken(analyticId)
+    const decryptedAnalyticId = decryptToken(analyticId);
     if (decryptedAnalyticId) {
       const timestamp = new Date().toISOString();
       const { error: updateError } = await supabase
         .from("Messages")
         .update({ opened_email_at: timestamp, opened_email: true })
         .eq("tracking_id", decryptedAnalyticId);
-      
+
       if (updateError) {
         res.sendFile(path.join(__dirname, "public", "hi.png"), {
           headers: {

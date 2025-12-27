@@ -13,13 +13,10 @@ const router = express.Router();
 
 router.post("/mail-webhook", async (req, res) => {
   console.log("/mail-webhook HIT");
-  console.log("Headers:", req.headers);
   console.log("Body:", req.body);
-  await verifyPubSubJwt(req, res)
+  await verifyPubSubJwt(req, res);
 
   const message = req.body?.message;
-  console.log("Message:", message);
-
   if (!message?.data) {
     console.log("Missing message.data");
     return res.status(400).json({ error: "Invalid PubSub payload" });
@@ -27,29 +24,16 @@ router.post("/mail-webhook", async (req, res) => {
 
   try {
     const decoded = Buffer.from(message.data, "base64").toString();
-    console.log("Decoded base64:", decoded);
-
     const pubSubData = JSON.parse(decoded);
-    console.log("Parsed pubSubData:", pubSubData);
-
-    const response = await inboxQueue.add("inbox-sync", {
+    await inboxQueue.add("inbox-sync", {
       historyId: pubSubData.historyId,
       email: pubSubData.emailAddress,
     });
 
-    /**
-     * {
-        jobId: pubSubData.emailAddress,
-        removeOnComplete: true,
-        removeOnFail: true,
-      }
-     */
-
-    console.log("Job added to queue");
+    console.log(`[INBOX SYNC] Job Added to Queue ${pubSubData.emailAddress}`);
 
     return res.status(200).json({ message: "Finished Update" });
   } catch (err) {
-    console.error("ERROR:", err);
     return res.status(500).json({ message: "internal server error" });
   }
 });

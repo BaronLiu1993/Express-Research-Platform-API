@@ -75,7 +75,6 @@ router.get("/signin-with-google", async (req, res) => {
 
 router.post("/oauth2callback/login", async (req, res) => {
   const code = req.body.code;
-
   try {
     const { data: tokenData, error: tokenDataError } =
       await supabase.auth.exchangeCodeForSession(code);
@@ -123,18 +122,27 @@ router.post("/oauth2callback/login", async (req, res) => {
       }
     }
 
-    return res.status(200).json({
-      user_id: user.id,
-      accessToken: session.access_token,
-      refreshToken: session.refresh_token,
-      redirectURL: "/repository",
+    res.cookie("access_token", session.access_token, {
+      httpOnly: true,
+      secure: true, // Replace with is prod
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 1000,
+    });
+
+    res.cookie("refresh_token", session.refresh_token, {
+      httpOnly: true,
+      secure: true, // Replace with is prod
+      secure: true,
+      sameSite: "lax",
+      path: "/auth/refresh",
+      maxAge: 14 * 24 * 60 * 60 * 1000,
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
 });
 
-//Registration
 router.post("/oauth2callback/register", async (req, res) => {
   const code = req.body.code;
 
@@ -197,7 +205,6 @@ router.post("/oauth2callback/register", async (req, res) => {
     }
 
     return res.status(200).json({
-      user_id: user.id,
       accessToken: session.access_token,
       refreshToken: session.refresh_token,
       redirectURL: "/register",
@@ -557,8 +564,6 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
-    console.log(watchStatus);
-
     const newLabel = await gmail.users.labels.create({
       userId: "me",
       requestBody: {
@@ -568,8 +573,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
-    console.log(newLabel)
-
+    console.log(newLabel);
 
     const outreachLabelId = newLabel.data.id;
 
