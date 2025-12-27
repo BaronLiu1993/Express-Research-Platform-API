@@ -3,6 +3,8 @@ import express from "express";
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
+import { z } from "zod";
+
 
 dotenv.config();
 
@@ -13,48 +15,61 @@ const OPEN_AI = new OpenAI({
 
 const router = express.Router();
 
+
 router.get("/taishan", verifyToken, async (req, res) => {
   const LIMIT = 20;
   const MAX_LIST_ITEMS = 30;
   const MAX_STRING_LEN = 100;
 
-  const SAFE_TEXT_RE = /^[a-zA-Z0-9 .,'"\-()!?/&+:@#%]*$/; 
-  const SAFE_TOKEN_RE = /^[a-zA-Z0-9 .,'"\-()&/]+$/; 
+  const SAFE_TEXT_RE = /^[a-zA-Z0-9 .,'"\-()!?/&+:@#%]*$/;
+  const SAFE_TOKEN_RE = /^[a-zA-Z0-9 .,'"\-()&/]+$/;
 
-  const clampLen = (s, max = MAX_STRING_LEN) => (s.length > max ? s.slice(0, max) : s);
-  const normalize = (s) => s.normalize("NFKC").trim();
+  const normalize = (s) =>
+    String(s ?? "")
+      .normalize("NFKC")
+      .trim();
+  const clamp = (s, max = MAX_STRING_LEN) =>
+    s.length > max ? s.slice(0, max) : s;
 
-  const sanitizeText = (s) => {
-    const t = clampLen(normalize(String(s || "")));
-    if (!SAFE_TEXT_RE.test(t)) return null;
-    return t;
-  };
-
-  const toList = (val) => {
-    const arr = Array.isArray(val) ? val : (val ?? "").split(",");
+  const toTokenList = (val) => {
+    const arr = Array.isArray(val) ? val : String(val ?? "").split(",");
     const cleaned = arr
-      .map((v) => clampLen(normalize(String(v || ""))))
+      .map((v) => clamp(normalize(v)))
       .filter(Boolean)
       .filter((v) => SAFE_TOKEN_RE.test(v));
+
     return [...new Set(cleaned)].slice(0, MAX_LIST_ITEMS);
   };
 
-  const pageNum = Math.max(1, Number(req.query.page) || 1);
-  const from = (pageNum - 1) * LIMIT;
-  const to = from + LIMIT - 1;
+  const TaishanQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    search: z
+      .string()
+      .optional()
+      .transform((v) => clamp(normalize(v)))
+      .refine((v) => v === "" || SAFE_TEXT_RE.test(v), {
+        message: "Invalid characters in search.",
+      })
+      .default(""),
+    school: z.any().optional().transform(toTokenList).default([]),
+    faculty: z.any().optional().transform(toTokenList).default([]),
+    department: z.any().optional().transform(toTokenList).default([]),
+  });
 
-  const rawSearch = (req.query.search ?? "");
-  const search = sanitizeText(rawSearch);
-  if (rawSearch && search === null) {
-    return res.status(400).json({ message: "Invalid characters in search." });
+  const parsed = TaishanQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: "Invalid query parameters.",
+    });
   }
 
-  const schoolList = toList(req.query.school);
-  const facultyList = toList(req.query.faculty);
-  const departmentList = toList(req.query.department);
+  const { page, search, school, faculty, department } = parsed.data;
+
+  const from = (page - 1) * LIMIT;
+  const to = from + LIMIT - 1;
 
   try {
-    if (search && search !== "") {
+    if (search) {
       const embeddingResult = await OPEN_AI.embeddings.create({
         model: "text-embedding-3-large",
         input: search,
@@ -70,32 +85,36 @@ router.get("/taishan", verifyToken, async (req, res) => {
         {
           student_embedding: embedding,
           match_threshold: 0.2,
-          page_size: 200, 
+          page_size: 200,
           page_offset: 0,
         }
       );
+
       if (error) {
-        return res.status(400).json({message: "Failed to retrieve"})
+        return res.status(400).json({ message: "Failed to retrieve" });
       }
-      const hasSchool = schoolList.length > 0;
-      const hasFaculty = facultyList.length > 0;
-      const hasDepartment = departmentList.length > 0;
+
+      const hasSchool = school.length > 0;
+      const hasFaculty = faculty.length > 0;
+      const hasDepartment = department.length > 0;
 
       const filtered = (data || []).filter((row) => {
-        const okSchool = !hasSchool || (row.school && schoolList.includes(row.school));
-        const okFaculty = !hasFaculty || (row.faculty && facultyList.includes(row.faculty));
-        const okDept = !hasDepartment || (row.department && departmentList.includes(row.department));
+        const okSchool =
+          !hasSchool || (row.school && school.includes(row.school));
+        const okFaculty =
+          !hasFaculty || (row.faculty && faculty.includes(row.faculty));
+        const okDept =
+          !hasDepartment ||
+          (row.department && department.includes(row.department));
         return okSchool && okFaculty && okDept;
       });
 
       const tableCount = filtered.length;
       const pageSlice = filtered.slice(from, to + 1);
 
-      return res.status(200).json({
-        tableData: pageSlice,
-        tableCount,
-      });
+      return res.status(200).json({ tableData: pageSlice, tableCount });
     }
+
     let query = req.supabaseClient
       .from("Taishan")
       .select(
@@ -103,9 +122,9 @@ router.get("/taishan", verifyToken, async (req, res) => {
         { count: "exact" }
       );
 
-    if (schoolList.length) query = query.in("school", schoolList);
-    if (facultyList.length) query = query.in("faculty", facultyList);
-    if (departmentList.length) query = query.in("department", departmentList);
+    if (school.length) query = query.in("school", school);
+    if (faculty.length) query = query.in("faculty", faculty);
+    if (department.length) query = query.in("department", department);
 
     query = query.order("name", { ascending: true }).range(from, to);
 
@@ -118,12 +137,22 @@ router.get("/taishan", verifyToken, async (req, res) => {
   }
 });
 
-
-
 router.get("/match-professors", verifyToken, async (req, res) => {
-  const userId = req.user.sub;
-  const match_count = 15;
+  const match_count = 20;
   const match_threshold = 0.2;
+  const AuthSchema = z.object({
+    sub: z.string().min(1).max(128),
+  });
+
+  const authParsed = AuthSchema.safeParse(req.user);
+  if (!authParsed.success) {
+    return res.status(401).json({
+      message: "Invalid auth token payload.",
+    });
+  }
+
+  const userId = authParsed.data.sub;
+
   try {
     const { data: matches, error: matchesFetchError } =
       await req.supabaseClient.rpc("match_professors_for_student", {
@@ -131,9 +160,11 @@ router.get("/match-professors", verifyToken, async (req, res) => {
         match_threshold,
         match_count,
       });
+
     if (matchesFetchError) {
       return res.status(400).json({ message: "Failed to Fetch" });
     }
+
     return res.status(200).json({ matches });
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });

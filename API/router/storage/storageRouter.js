@@ -6,15 +6,29 @@ import {
   generateUploadPresignedURL,
 } from "../../services/storageServices.js";
 
+import { AuthIdSchema } from "../../schema/authSchema.js";
+import { BodySchema } from "../../schema/storageSchema.js";
+import { z } from "zod";
+
 const router = express.Router();
 
 router.post("/generate-upload-url/resume", verifyToken, async (req, res) => {
-  const userId = req.user.sub;
-  const { fileName, fileType } = req.body;
-
-  if (!fileName || !fileType) {
-    return res.status(400).json({ message: "Invalid Name or Type" });
+  const authParsed = AuthIdSchema.safeParse(req.user);
+  if (!authParsed.success) {
+    return res.status(401).json({
+      message: "Invalid auth token.",
+    });
   }
+
+  const userId = authParsed.data.sub;
+  const bodyParsed = BodySchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    return res.status(400).json({
+      message: "Invalid request body.",
+    });
+  }
+
+  const { fileName, fileType } = bodyParsed.data;
 
   try {
     const presignedURLData = await generateUploadPresignedURL({
@@ -25,7 +39,10 @@ router.post("/generate-upload-url/resume", verifyToken, async (req, res) => {
 
     const { error: insertionError } = await req.supabaseClient
       .from("User_Profiles")
-      .update({ resume: fileName, resume_path: `${userId}-resume` })
+      .update({
+        resume: fileName,
+        resume_path: `${userId}-resume`,
+      })
       .eq("user_id", userId);
 
     if (insertionError) {
@@ -42,14 +59,26 @@ router.post(
   "/generate-upload-url/transcript",
   verifyToken,
   async (req, res) => {
-    const userId = req.user.sub;
-    const { fileName, fileType } = req.body;
+    const authParsed = AuthIdSchema.safeParse(req.user);
 
-    if (!fileName || !fileType) {
-      return res
-        .status(400)
-        .json({ message: "Invalid File Name or File Type" });
+    if (!authParsed.success) {
+      return res.status(401).json({
+        message: "Invalid auth token.",
+      });
     }
+
+    const userId = authParsed.data.sub;
+
+    const bodyParsed = BodySchema.safeParse(req.body);
+
+    if (!bodyParsed.success) {
+      return res.status(400).json({
+        message: "Invalid File Name or File Type",
+      });
+    }
+
+    const { fileName, fileType } = bodyParsed.data;
+
     try {
       const presignedURLData = await generateUploadPresignedURL({
         userId,
@@ -77,7 +106,16 @@ router.post(
 );
 
 router.get("/check-file-existance", verifyToken, async (req, res) => {
-  const userId = req.user.sub;
+  const authParsed = AuthIdSchema.safeParse(req.user);
+
+  if (!authParsed.success) {
+    return res.status(401).json({
+      message: "Invalid auth token.",
+    });
+  }
+
+  const userId = authParsed.data.sub;
+
   try {
     const { data: fileData, error: fileError } = await req.supabaseClient
       .from("User_Profiles")
@@ -104,8 +142,24 @@ router.get("/check-file-existance", verifyToken, async (req, res) => {
 });
 
 router.get("/get-file-url", verifyToken, async (req, res) => {
-  const userId = req.user.sub;
-  const { fileType, fileName } = req.query;
+  const authParsed = AuthIdSchema.safeParse(req.user);
+
+  if (!authParsed.success) {
+    return res.status(401).json({
+      message: "Invalid auth token.",
+    });
+  }
+
+  const userId = authParsed.data.sub;
+
+  const queryParsed = BodySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return res.status(400).json({
+      message: "Invalid query parameters.",
+    });
+  }
+
+  const { fileType, fileName } = queryParsed.data;
   try {
     const presignedURLData = await generateGetPresignedURL({
       userId,
@@ -119,59 +173,50 @@ router.get("/get-file-url", verifyToken, async (req, res) => {
   }
 });
 
+const DeleteFileParamsSchema = z.object({
+  fileType: z.enum(["resume", "transcript"]),
+  fileName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .refine((v) => !v.includes("/") && !v.includes("\\"), {
+      message: "Invalid fileName.",
+    }),
+});
+
 router.delete(
-  "/delete-file/resume/:fileName",
+  "/delete-file/:fileType/:fileName",
   verifyToken,
   async (req, res) => {
-    const userId = req.user.sub;
-    const { fileName } = req.params;
-
-    try {
-      await deleteFile({
-        userId,
-        fileType: "resume",
-        fileName,
-      });
-
-      const { error: deletionError } = await req.supabaseClient
-        .from("User_Profiles")
-        .update({
-          resume: null,
-          resume_path: null,
-        })
-        .eq("user_id", userId)
-        .single();
-
-      if (deletionError) {
-        return res.status(400).json({ message: "Failed To Delete!" });
-      }
-
-      return res.status(200).json({ message: "Deleted Resources" });
-    } catch (err) {
-      return res.status(500).json({ message: "Internal Server Error" });
+    const authParsed = AuthIdSchema.safeParse(req.user);
+    if (!authParsed.success) {
+      return res.status(401).json({ message: "Invalid auth token." });
     }
-  }
-);
 
-router.delete(
-  "/delete-file/transcript/:fileName",
-  verifyToken,
-  async (req, res) => {
-    const userId = req.user.sub;
-    const { fileName } = req.params;
-    try {
-      await deleteFile({
-        userId,
-        fileType: "transcript",
-        fileName,
+    const userId = authParsed.data.sub;
+
+    const paramsParsed = BodySchema.safeParse(req.params);
+
+    if (!paramsParsed.success) {
+      return res.status(400).json({
+        message: "Invalid route parameters.",
       });
+    }
+
+    const { fileType, fileName } = paramsParsed.data;
+
+    try {
+      await deleteFile({ userId, fileType, fileName });
+
+      const update =
+        fileType === "resume"
+          ? { resume: null, resume_path: null }
+          : { transcript: null, transcript_path: null };
 
       const { error: deletionError } = await req.supabaseClient
         .from("User_Profiles")
-        .update({
-          transcript: null,
-          transcript_path: null,
-        })
+        .update(update)
         .eq("user_id", userId)
         .single();
 
