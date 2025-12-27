@@ -11,9 +11,11 @@ const router = express.Router();
 
 router.post("/create-draft", verifyToken, async (req, res) => {
   const { professorData, baseBody } = req.body;
+
   if (professorData.length > 5) {
     res.status(400).json({ message: "Queueing Too Many" });
   }
+  
   const userId = req.user.sub;
   try {
     const jobs = professorData.map((professor) => ({

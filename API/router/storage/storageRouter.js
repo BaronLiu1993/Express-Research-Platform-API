@@ -7,8 +7,10 @@ import {
 } from "../../services/storageServices.js";
 
 import { AuthIdSchema } from "../../schema/authSchema.js";
-import { BodySchema } from "../../schema/storageSchema.js";
-import { z } from "zod";
+import {
+  BodySchema,
+  DeleteFileParamsSchema,
+} from "../../schema/storageSchema.js";
 
 const router = express.Router();
 
@@ -173,18 +175,6 @@ router.get("/get-file-url", verifyToken, async (req, res) => {
   }
 });
 
-const DeleteFileParamsSchema = z.object({
-  fileType: z.enum(["resume", "transcript"]),
-  fileName: z
-    .string()
-    .trim()
-    .min(1)
-    .max(255)
-    .refine((v) => !v.includes("/") && !v.includes("\\"), {
-      message: "Invalid fileName.",
-    }),
-});
-
 router.delete(
   "/delete-file/:fileType/:fileName",
   verifyToken,
@@ -196,7 +186,7 @@ router.delete(
 
     const userId = authParsed.data.sub;
 
-    const paramsParsed = BodySchema.safeParse(req.params);
+    const paramsParsed = DeleteFileParamsSchema.safeParse(req.params);
 
     if (!paramsParsed.success) {
       return res.status(400).json({
