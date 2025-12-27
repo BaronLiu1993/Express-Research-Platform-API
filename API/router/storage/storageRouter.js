@@ -180,6 +180,7 @@ router.delete(
   verifyToken,
   async (req, res) => {
     const authParsed = AuthIdSchema.safeParse(req.user);
+
     if (!authParsed.success) {
       return res.status(401).json({ message: "Invalid auth token." });
     }

@@ -1,10 +1,13 @@
 import express from "express";
 import { verifyToken } from "../../services/authServices.js";
 import { v4 as uuidv4 } from "uuid";
+import { AuthIdSchema } from "../../schema/authSchema.js";
 
 const router = express.Router();
 
+// Helper Functions
 function cleanSnippetPlaceholders(str) {
+  if (typeof str !== "string") return str;
   return str.replace(/\/(?=\{\{)/g, "");
 }
 
@@ -14,7 +17,16 @@ function removeBracketPlaceholders(str) {
 }
 
 router.post("/insert-snippet", verifyToken, async (req, res) => {
-  const userId = req.user.sub;
+  const authParsed = AuthIdSchema.safeParse(req.user);
+
+  if (!authParsed.success) {
+    return res.status(401).json({
+      message: "Invalid auth token.",
+    });
+  }
+
+  const userId = authParsed.data.sub;
+
   const { snippet_html, snippet_subject } = req.body;
 
   const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
@@ -36,7 +48,6 @@ router.post("/insert-snippet", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Failed To Insert" });
     }
 
-
     const snippetId = insertionData.id;
     return res.status(200).json({ snippetId });
   } catch (err) {
@@ -46,6 +57,14 @@ router.post("/insert-snippet", verifyToken, async (req, res) => {
 
 router.post("/sync-variables", verifyToken, async (req, res) => {
   const { variableArray, professorIdArray } = req.body;
+  const authParsed = AuthIdSchema.safeParse(req.user);
+
+  if (!authParsed.success) {
+    return res.status(401).json({
+      message: "Invalid auth token.",
+    });
+  }
+
   if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
     return res.status(400).json({ message: "Invalid input arrays" });
   }
@@ -80,9 +99,9 @@ router.post("/sync-variables", verifyToken, async (req, res) => {
             .select(newVariableArray.join())
             .eq("id", professorId)
             .single();
-        
+
         if (variableError) {
-            return res.status(400).json({ message: "Failed to Filter."})
+          return res.status(400).json({ message: "Failed to Filter." });
         }
 
         variableData = filteredData || {};
@@ -110,7 +129,7 @@ router.post("/sync-variables", verifyToken, async (req, res) => {
   } catch (err) {
     return res.status(500).json({
       message: "Internal Server Error",
-      compelted: false,
+      completed: false,
     });
   }
 });

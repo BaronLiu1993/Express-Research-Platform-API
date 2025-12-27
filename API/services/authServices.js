@@ -119,6 +119,7 @@ export async function verifyPubSubJwt(req, res) {
 //Refresh In Here
 export async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
+  
   if (!authHeader) {
     return res.status(401).json({ message: "Missing Authorization header" });
   }
