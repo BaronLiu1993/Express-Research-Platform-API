@@ -63,6 +63,7 @@ router.get("/signin-with-google", async (req, res) => {
           scopes: scopes.join(" "),
           queryParams: {
             access_type: "offline",
+            prompt: "consent",
           },
         },
       });
