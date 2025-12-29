@@ -6,7 +6,6 @@ import { SnippetSchema } from "../../schema/snippetSchema.js";
 
 const router = express.Router();
 
-// Helper Functions
 function cleanSnippetPlaceholders(str) {
   if (typeof str !== "string") return str;
   return str.replace(/\/(?=\{\{)/g, "");
@@ -29,13 +28,12 @@ router.post("/insert-snippet", verifyToken, async (req, res) => {
   const userId = authParsed.data.sub;
 
   const parsed = SnippetSchema.safeParse(req.body);
-  
+
   if (!parsed.success) {
     return res.status(401).json({ message: "Invalid body" });
   }
 
   const { snippet_html, snippet_subject } = parsed.data;
-
   const parsedSnippetHtml = cleanSnippetPlaceholders(snippet_html);
   const identifier = uuidv4();
   try {
