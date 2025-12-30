@@ -21,6 +21,9 @@ const scopes = [
   "https://www.googleapis.com/auth/gmail.modify",
 ];
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
 const supabaseServerSide = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -79,7 +82,6 @@ router.get("/signin-with-google", async (req, res) => {
   }
 });
 
-
 router.get("/signin-with-google", async (req, res) => {
   try {
     const { data: callbackData, error: authError } =
@@ -120,7 +122,13 @@ router.post("/oauth2callback/login", async (req, res) => {
     const { session } = tokenData;
     const user = session.user;
 
-    const { error: userDoesNotExist } = await supabase
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      },
+    });
+
+    const { error: userDoesNotExist } = await supabaseClient
       .from("User_Profiles")
       .select("user_id")
       .eq("user_id", user.id)
@@ -128,7 +136,7 @@ router.post("/oauth2callback/login", async (req, res) => {
 
     if (userDoesNotExist) {
       if (session.provider_refresh_token) {
-        const { error: tokenInsertionError } = await supabase
+        const { error: tokenInsertionError } = await supabaseClient
           .from("User_Profiles")
           .insert({
             user_id: user.id,
@@ -141,7 +149,7 @@ router.post("/oauth2callback/login", async (req, res) => {
           return res.status(400).json({ message: "Failed" });
         }
       } else {
-        const { error: tokenInsertionError } = await supabase
+        const { error: tokenInsertionError } = await supabaseClient
           .from("User_Profiles")
           .insert({
             user_id: user.id,
@@ -156,7 +164,6 @@ router.post("/oauth2callback/login", async (req, res) => {
     }
 
     return res.status(200).json({
-      user_id: user.id,
       accessToken: session.access_token,
       refreshToken: session.refresh_token,
       redirectURL: "/repository",
@@ -186,7 +193,13 @@ router.post("/oauth2callback/register", async (req, res) => {
     const { session } = tokenData;
     const user = session.user;
 
-    const { data: userExists, error: userDoesNotExist } = await supabase
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      },
+    });
+
+    const { error: userDoesNotExist } = await supabaseClient
       .from("User_Profiles")
       .select("user_id")
       .eq("user_id", user.id)
@@ -194,7 +207,6 @@ router.post("/oauth2callback/register", async (req, res) => {
 
     if (!userDoesNotExist) {
       return res.status(200).json({
-        user_id: user.id,
         accessToken: session.access_token,
         refreshToken: session.refresh_token,
         redirectURL: "/repository",
@@ -202,7 +214,7 @@ router.post("/oauth2callback/register", async (req, res) => {
     }
 
     if (session.provider_refresh_token) {
-      const { error: tokenInsertionError } = await supabase
+      const { error: tokenInsertionError } = await supabaseClient
         .from("User_Profiles")
         .insert({
           user_id: user.id,
@@ -215,7 +227,7 @@ router.post("/oauth2callback/register", async (req, res) => {
         return res.status(400).json({ message: "Failed" });
       }
     } else {
-      const { error: tokenInsertionError } = await supabase
+      const { error: tokenInsertionError } = await supabaseClient
         .from("User_Profiles")
         .insert({
           user_id: user.id,
@@ -229,7 +241,6 @@ router.post("/oauth2callback/register", async (req, res) => {
     }
 
     return res.status(200).json({
-      user_id: user.id,
       accessToken: session.access_token,
       refreshToken: session.refresh_token,
       redirectURL: "/register",
