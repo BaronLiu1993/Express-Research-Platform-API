@@ -43,8 +43,8 @@ async function updateInbox({ historyId, email }) {
     
     const result = await gmail.users.history.list({
       userId: "me",
-      startHistoryId: historyId,
-      historyTypes: ["messageAdded", "labelAdded"],
+      startHistoryId: historyIdData.history_id,
+      historyTypes: ["messageAdded"],
       maxResults: 500,
     });
 
