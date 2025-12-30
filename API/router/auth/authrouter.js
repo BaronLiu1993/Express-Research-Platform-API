@@ -193,7 +193,7 @@ router.post("/oauth2callback/register", async (req, res) => {
     const { session } = tokenData;
     const user = session.user;
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: `Bearer ${session.access_token}` },
       },
