@@ -79,124 +79,94 @@ router.get("/signin-with-google", async (req, res) => {
   }
 });
 
-router.post("/oauth2callback/login", async (req, res) => {
-  console.log("[LOGIN] Incoming request");
-  console.log("[LOGIN] Body:", req.body);
 
-  const code = req.body?.code;
-  if (!code) {
-    console.log("[LOGIN] ❌ No code provided");
-    return res.status(400).json({ message: "No code provided" });
-  }
-
+router.get("/signin-with-google", async (req, res) => {
   try {
-    console.log("[LOGIN] Exchanging code for session...");
-
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (error) {
-      console.error("[LOGIN] ❌ exchangeCodeForSession error:", error);
+    const { data: callbackData, error: authError } =
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: "https://trypalette.app/account/login",
+          scopes: scopes.join(" "),
+          queryParams: {
+            access_type: "offline",
+          },
+        },
+      });
+    if (authError) {
+      return res.status(400).json({ message: "Authentication Error" });
     }
 
-    if (error || !data?.session) {
-      console.log("[LOGIN] ❌ No session returned");
+    if (callbackData.url) {
+      res.redirect(callbackData.url);
+    }
+  } catch (err) {
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.post("/oauth2callback/login", async (req, res) => {
+  const code = req.body.code;
+
+  try {
+    const { data: tokenData, error: tokenDataError } =
+      await supabase.auth.exchangeCodeForSession(code);
+
+    if (tokenDataError || !tokenData?.session) {
       return res
         .status(400)
         .json({ message: "Failed to exchange code for session" });
     }
-
-    const { session } = data;
+    const { session } = tokenData;
     const user = session.user;
 
-    console.log("[LOGIN] ✅ Session received");
-    console.log("[LOGIN] User ID:", user.id);
-    console.log("[LOGIN] User email:", user.email);
-    console.log("[LOGIN] Provider token exists:", !!session.provider_token);
-    console.log(
-      "[LOGIN] Provider refresh token exists:",
-      !!session.provider_refresh_token
-    );
-
-    console.log("[LOGIN] Looking up user profile...");
-
-    const { data: profile, error: lookupErr } = await supabaseServerSide
+    const { error: userDoesNotExist } = await supabase
       .from("User_Profiles")
       .select("user_id")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .single();
 
-    if (lookupErr) {
-      console.error("[LOGIN] ❌ Profile lookup error:", lookupErr);
-      return res.status(500).json({ message: "Profile lookup failed" });
-    }
-
-    console.log("[LOGIN] Profile lookup result:", profile);
-
-    // ⚠️ NOTE: profile will be an array
-    if (!profile || profile.length === 0) {
-      console.log("[LOGIN] No profile found → creating new profile");
-
-      const insertPayload = {
-        user_id: user.id,
-        student_email: user.email,
-        student_name: user.user_metadata?.full_name ?? null,
-        gmail_auth_token: session.provider_token
-          ? encryptToken(session.provider_token)
-          : null,
-        gmail_refresh_token: session.provider_refresh_token
-          ? encryptToken(session.provider_refresh_token)
-          : null,
-      };
-
-      console.log("[LOGIN] Insert payload:", {
-        ...insertPayload,
-        gmail_auth_token: insertPayload.gmail_auth_token ? "[ENCRYPTED]" : null,
-        gmail_refresh_token: insertPayload.gmail_refresh_token
-          ? "[ENCRYPTED]"
-          : null,
-      });
-
-      const { error: insertErr } = await supabaseServerSide
-        .from("User_Profiles")
-        .insert(insertPayload);
-
-      if (insertErr) {
-        console.error("[LOGIN] ❌ Profile insert failed:", insertErr);
-        return res.status(400).json({ message: "Failed to create profile" });
+    if (userDoesNotExist) {
+      if (session.provider_refresh_token) {
+        const { error: tokenInsertionError } = await supabase
+          .from("User_Profiles")
+          .insert({
+            user_id: user.id,
+            student_email: user.email,
+            student_name: user.user_metadata?.full_name,
+            gmail_auth_token: encryptToken(session.provider_token),
+            gmail_refresh_token: encryptToken(session.provider_refresh_token),
+          });
+        if (tokenInsertionError) {
+          return res.status(400).json({ message: "Failed" });
+        }
+      } else {
+        const { error: tokenInsertionError } = await supabase
+          .from("User_Profiles")
+          .insert({
+            user_id: user.id,
+            student_email: user.email,
+            student_name: user.user_metadata?.full_name,
+            gmail_auth_token: encryptToken(session.provider_token),
+          });
+        if (tokenInsertionError) {
+          return res.status(400).json({ message: "Failed" });
+        }
       }
-
-      console.log("[LOGIN] ✅ Profile created successfully");
-    } else {
-      console.log("[LOGIN] ✅ Profile already exists");
     }
 
-    console.log("[LOGIN] Setting cookies...");
-
-    res.cookie("access_token", session.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      path: "/",
-      maxAge: 60 * 60 * 1000,
+    return res.status(200).json({
+      user_id: user.id,
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      redirectURL: "/repository",
     });
-
-    res.cookie("refresh_token", session.refresh_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      path: "/auth/refresh",
-      maxAge: 14 * 24 * 60 * 60 * 1000,
-    });
-
-    console.log("[LOGIN] ✅ Cookies set");
-    console.log("[LOGIN] Responding with redirect");
-
-    return res.status(200).json({ ok: true, redirectURL: "/repository" });
   } catch (err) {
-    console.error("[LOGIN] ❌ Uncaught error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 });
 
+//Registration
 router.post("/oauth2callback/register", async (req, res) => {
   const code = req.body.code;
 
@@ -216,7 +186,7 @@ router.post("/oauth2callback/register", async (req, res) => {
     const { session } = tokenData;
     const user = session.user;
 
-    const { error: userDoesNotExist } = await supabaseServerSide
+    const { data: userExists, error: userDoesNotExist } = await supabase
       .from("User_Profiles")
       .select("user_id")
       .eq("user_id", user.id)
@@ -232,7 +202,7 @@ router.post("/oauth2callback/register", async (req, res) => {
     }
 
     if (session.provider_refresh_token) {
-      const { error: tokenInsertionError } = await supabaseServerSide
+      const { error: tokenInsertionError } = await supabase
         .from("User_Profiles")
         .insert({
           user_id: user.id,
@@ -245,7 +215,7 @@ router.post("/oauth2callback/register", async (req, res) => {
         return res.status(400).json({ message: "Failed" });
       }
     } else {
-      const { error: tokenInsertionError } = await supabaseServerSide
+      const { error: tokenInsertionError } = await supabase
         .from("User_Profiles")
         .insert({
           user_id: user.id,
@@ -258,20 +228,11 @@ router.post("/oauth2callback/register", async (req, res) => {
       }
     }
 
-    res.cookie("access_token", session.access_token, {
-      httpOnly: true,
-      secure: true, // Replace with is prod
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 1000,
-    });
-
-    res.cookie("refresh_token", session.refresh_token, {
-      httpOnly: true,
-      secure: true, // Replace with is prod
-      sameSite: "lax",
-      path: "/auth/refresh",
-      maxAge: 14 * 24 * 60 * 60 * 1000,
+    return res.status(200).json({
+      user_id: user.id,
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      redirectURL: "/register",
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
