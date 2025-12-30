@@ -1,13 +1,18 @@
 import { Worker } from "bullmq";
 import { Connection } from "../../redis/redis.js";
-import { supabase } from "../../supabase/supabase.js";
 import { configureOAuth } from "../../services/googleServices.js";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseServerSide = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 async function updateInbox({ historyId, email }) {
   try {
     console.log(`[InboxWorker] Starting update for email: ${email}`);
 
-    const { data: userDataId, error: userDataFetchError } = await supabase
+    const { data: userDataId, error: userDataFetchError } = await supabaseServerSide
       .from("User_Profiles")
       .select("user_id")
       .eq("student_email", email)
@@ -24,7 +29,7 @@ async function updateInbox({ historyId, email }) {
       supabase: supabase,
     });
 
-    const { data: historyIdData, error: historyIdFetchError } = await supabase
+    const { data: historyIdData, error: historyIdFetchError } = await supabaseServerSide
       .from("User_Profiles")
       .select("history_id")
       .eq("user_id", userDataId.user_id)
@@ -66,7 +71,7 @@ async function updateInbox({ historyId, email }) {
       );
 
       const rpcStarted = Date.now();
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
+      const { data: rpcData, error: rpcError } = await supabaseServerSide.rpc(
         "tracked_thread_exists",
         {
           p_user_id: userDataId.user_id,
@@ -116,7 +121,7 @@ async function updateInbox({ historyId, email }) {
       );
 
       const updateStarted = Date.now();
-      const { data: updatedRows, error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabaseServerSide
         .from("Messages")
         .update({
           sent_at: lastUpdatedAt,
@@ -155,7 +160,7 @@ async function updateInbox({ historyId, email }) {
 
     console.log(`[InboxWorker] Done processing ${threadIdSet.size} threads.`);
 
-    const { error: historyUpdateError } = await supabase
+    const { error: historyUpdateError } = await supabaseServerSide
       .from("User_Profiles")
       .update({ history_id: historyId })
       .eq("user_id", userDataId.user_id);
