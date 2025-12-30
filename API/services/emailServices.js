@@ -243,7 +243,6 @@ export async function sendSnippetEmail({
       requestBody: { id: draftData.draft_id },
     });
 
-    console.log(sendResponse);
 
     const { error: deletionError } = await supabase
       .from("Emails")
@@ -278,7 +277,7 @@ export async function sendSnippetEmail({
       throw new Error("Failed to Insert into Database");
     }
 
-    const labelResponse = await gmail.users.messages.modify({
+    await gmail.users.messages.modify({
       userId: "me",
       id: sendResponse.data.id,
       requestBody: {
@@ -288,7 +287,6 @@ export async function sendSnippetEmail({
 
     return { message: "Successfully Sent!" };
   } catch (err) {
-    console.log(err);
     return { message: "Internal Server Error" };
   }
 }
