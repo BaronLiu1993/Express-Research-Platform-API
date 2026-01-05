@@ -5,7 +5,6 @@ import dotenv from "dotenv";
 import { verifyToken } from "../../services/authServices.js";
 import { z } from "zod";
 
-
 dotenv.config();
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;

@@ -18,16 +18,11 @@ const router = express.Router();
 const scopes = [
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.modify",
+  //"https://www.googleapis.com/auth/gmail.modify",
 ];
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-
-const supabaseServerSide = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
 
 router.get("/signup-with-google", async (req, res) => {
   try {
