@@ -9,7 +9,6 @@ import crypto from "crypto";
 
 dotenv.config();
 
-//Initialise OpenAI Client
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
 const SUPABASE_JWT_ALGORITHM = process.env.SUPABASE_JWT_ALGORITHM;
@@ -43,7 +42,6 @@ export function encryptToken(token) {
   }
 }
 
-//Decrypt When Making Function Calls
 export function decryptToken(token) {
   try {
     const bytes = CryptoJS.AES.decrypt(token, secretKey);
@@ -54,7 +52,6 @@ export function decryptToken(token) {
   }
 }
 
-// Give restrictions on what can be generated
 export async function generateEmbeddings(research_input_embeddings) {
   try {
     const embeddings = await OPEN_AI.embeddings.create({

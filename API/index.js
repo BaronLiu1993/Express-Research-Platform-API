@@ -59,6 +59,10 @@ app.use("/reply", replyRouter);
 app.use("/storage", storageRouter)
 app.use("/scraper", scraperRouter)
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ message: "OK" });
+});
+
 app.listen(process.env.PORT, () => {
   console.log(`Server Started`);
 });

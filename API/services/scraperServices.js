@@ -155,8 +155,10 @@ export async function runScrapeJob({ school, faculty, department, url }) {
     return { url, scraped: professors.length, inserted: 0, skipped };
   }
 
-  const withEmbeddings = await generateBatchEmbeddings(newProfessors);
-  const result = await insertNewProfessors(withEmbeddings);
+  console.log(newProfessors)
+
+  //const withEmbeddings = await generateBatchEmbeddings(newProfessors);
+  //const result = await insertNewProfessors(withEmbeddings);
 
   return {
     url,

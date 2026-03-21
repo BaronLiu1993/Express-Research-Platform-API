@@ -1,6 +1,6 @@
-.PHONY: setup dev down restart logs test clean
+.PHONY: setup dev down logs test test-coverage clean
 
-# First-time setup: copy env template, build containers, start everything
+# First-time setup: copy env template, install deps
 setup:
 	@if [ ! -f API/.env ]; then \
 		cp API/.env.example API/.env; \
@@ -8,35 +8,26 @@ setup:
 	else \
 		echo "API/.env already exists, skipping copy"; \
 	fi
-	docker compose build
+	cd API && npm install
 
-# Start dev environment (API + Redis)
+# Start dev environment: Redis (Docker) + API (local with hot reload)
 dev:
 	docker compose up -d
 	@echo ""
-	@echo "API running at http://localhost:8080"
 	@echo "Redis running at localhost:6379"
+	@echo "Starting API with hot reload..."
 	@echo ""
-	@echo "View logs:  make logs"
-	@echo "Stop:       make down"
+	cd API && npm run dev
 
-# Stop everything
+# Stop Redis
 down:
 	docker compose down
 
-# Restart API only (after code changes)
-restart:
-	docker compose up -d --build api
-
-# Tail logs
+# Tail Redis logs
 logs:
 	docker compose logs -f
 
-# Tail API logs only
-logs-api:
-	docker compose logs -f api
-
-# Run tests (locally, not in Docker)
+# Run tests
 test:
 	cd API && npm test
 
@@ -44,7 +35,7 @@ test:
 test-coverage:
 	cd API && npm run test:coverage
 
-# Nuke everything: containers, volumes, images
+# Nuke Redis container + volume
 clean:
-	docker compose down -v --rmi local
-	@echo "Cleaned up containers, volumes, and images"
+	docker compose down -v
+	@echo "Cleaned up containers and volumes"

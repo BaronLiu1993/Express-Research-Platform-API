@@ -1,20 +1,4 @@
 services:
-  api:
-    build:
-      context: ./API
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    env_file:
-      - ./API/.env
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
   redis:
     image: redis:7-alpine
     ports:
