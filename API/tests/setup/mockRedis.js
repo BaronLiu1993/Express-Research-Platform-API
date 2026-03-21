@@ -20,6 +20,7 @@ export function setupRedisMock() {
   return mockConnection;
 }
 
+
 export function setupBullMQMock() {
   const mockQueue = {
     add: jest.fn().mockResolvedValue({ id: "job-1" }),
