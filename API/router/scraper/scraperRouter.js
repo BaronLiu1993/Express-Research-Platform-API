@@ -1,11 +1,38 @@
 import express from "express";
+import crypto from "crypto";
 import { verifyToken } from "../../services/authServices.js";
 import scrapeQueue from "../../queue/scrape/scrapeQueue.js";
 import { UNIVERSITY_URLS } from "../../scraper/universities.js";
 
 const router = express.Router();
 
-router.post("/trigger", verifyToken, async (req, res) => {
+function verifyScraperSecret(req, res, next) {
+  const provided = req.get("x-cron-secret");
+  const tsStr = req.get("x-cron-ts");
+  const expected = process.env.SCRAPER_CRON_SECRET;
+
+  if (!provided || !expected) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  const ts = Number(tsStr);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(ts) || Math.abs(now - ts) > 300) {
+    return res.status(403).json({ message: "Stale request" });
+  }
+
+  const ok =
+    Buffer.from(provided).length === Buffer.from(expected).length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+
+  if (!ok) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  return next();
+}
+
+router.post("/trigger", verifyScraperSecret, async (req, res) => {
   try {
     if (!UNIVERSITY_URLS.length) {
       return res.status(200).json({ message: "No URLs configured", count: 0 });

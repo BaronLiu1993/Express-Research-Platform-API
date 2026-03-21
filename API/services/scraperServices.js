@@ -13,7 +13,6 @@ const supabase = createClient(
 );
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 const PROFESSOR_EXTRACT_SCHEMA = {
   type: "object",
   properties: {
@@ -57,13 +56,8 @@ export async function scrapePage(url) {
 
 export async function stageAndDedupe(professors) {
   if (!professors.length) return [];
-
-  // Filter out entries without email (can't dedupe without it)
   const withEmail = professors.filter((p) => p.email && p.email.includes("@"));
-
   if (!withEmail.length) return [];
-
-  // Insert into staging table
   const { error: stageError } = await supabase
     .from("Taishan_Staging")
     .insert(withEmail);
@@ -71,8 +65,6 @@ export async function stageAndDedupe(professors) {
   if (stageError) {
     throw new Error(`Staging insert failed: ${stageError.message}`);
   }
-
-  // Get existing emails from Taishan
   const emails = withEmail.map((p) => p.email);
   const { data: existingRows, error: existingError } = await supabase
     .from("Taishan")
@@ -138,14 +130,11 @@ async function clearStaging(emails) {
 }
 
 export async function runScrapeJob({ school, faculty, department, url }) {
-  // 1. Scrape page via Firecrawl
   const rawProfessors = await scrapePage(url);
 
   if (!rawProfessors.length) {
     return { url, scraped: 0, inserted: 0, skipped: 0 };
   }
-
-  // 2. Attach school/faculty/department metadata
   const professors = rawProfessors.map((p) => ({
     name: p.name || "",
     email: p.email || "",

@@ -1,0 +1,30 @@
+name: Weekly Professor Scraper
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+jobs:
+  trigger-scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger scraper endpoint
+        run: |
+          TIMESTAMP=$(date +%s)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "x-cron-secret: ${{ secrets.SCRAPER_CRON_SECRET }}" \
+            -H "x-cron-ts: $TIMESTAMP" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.API_BASE_URL }}/scraper/trigger")
+
+          echo "HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Scraper triggered successfully"
+          else
+            echo "Scraper trigger failed with status $HTTP_STATUS"
+            exit 1
+          fi
