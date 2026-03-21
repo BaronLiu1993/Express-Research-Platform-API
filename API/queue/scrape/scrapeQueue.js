@@ -4,8 +4,8 @@ import { Connection } from "../../redis/redis.js";
 const scrapeQueue = new Queue("scrape-professors", {
   connection: Connection,
   defaultJobOptions: {
-    removeOnComplete: 100,
-    removeOnFail: 50,
+    removeOnComplete: 50,
+    removeOnFail: 10,
     attempts: 3,
     backoff: {
       type: "exponential",

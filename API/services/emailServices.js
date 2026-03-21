@@ -29,16 +29,11 @@ export async function generateDraftFromSnippetEmail({
 }) {
   const { snippetId, dynamicFields, to, fromName, fromEmail, toName } = body;
 
-  console.log(`[Draft] Starting for professor ${toName} <${to}> | snippetId=${snippetId}`);
-  console.log(`[Draft] dynamicFields:`, JSON.stringify(dynamicFields));
-
   if (!snippetId || !to || !fromName || !fromEmail || !toName) {
-    console.log(`[Draft] FAILED — missing inputs: snippetId=${snippetId}, to=${to}, fromName=${fromName}, fromEmail=${fromEmail}, toName=${toName}`);
     return { message: "Missing Inputs", completed: false };
   }
 
   const trackingId = uuidv4();
-  console.log(`[Draft] Generated trackingId=${trackingId}`);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
@@ -49,11 +44,7 @@ export async function generateDraftFromSnippetEmail({
   });
 
   try {
-    console.log(`[Draft] Configuring Gmail OAuth for user ${userId}...`);
     const gmail = await configureOAuth({ userId, supabase });
-    console.log(`[Draft] Gmail OAuth configured`);
-
-    console.log(`[Draft] Fetching snippet ${snippetId}...`);
     const { data: snippetData, error: snippetError } = await supabase
       .from("snippets")
       .select("*")
@@ -62,19 +53,15 @@ export async function generateDraftFromSnippetEmail({
       .single();
 
     if (snippetError) {
-      console.log(`[Draft] FAILED — snippet fetch error:`, snippetError.message);
       return { message: "Snippet Error", completed: false };
     }
-    console.log(`[Draft] Snippet fetched — subject template: "${snippetData.snippet_subject}"`);
 
     const snippetHTML = snippetData.snippet_html;
     const snippetSubject = snippetData.snippet_subject;
 
     const subject = Mustache.render(snippetSubject, dynamicFields);
     const html = Mustache.render(snippetHTML, dynamicFields);
-    console.log(`[Draft] Mustache rendered — subject: "${subject}"`);
 
-    console.log(`[Draft] Building MIME body...`);
     const raw = await makeBody({
       to,
       from: fromName,
@@ -82,16 +69,12 @@ export async function generateDraftFromSnippetEmail({
       subject: subject,
       html: html,
     });
-    console.log(`[Draft] MIME body built (${raw.length} chars)`);
 
-    console.log(`[Draft] Creating Gmail draft...`);
     const draft = await gmail.users.drafts.create({
       userId: "me",
       requestBody: { message: { raw } },
     });
-    console.log(`[Draft] Gmail draft created — draftId=${draft.data.id}, threadId=${draft.data.message.threadId}`);
 
-    console.log(`[Draft] Inserting record into Emails table...`);
     const { error: insertionError } = await supabase.from("Emails").insert([
       {
         user_id: userId,
@@ -107,14 +90,11 @@ export async function generateDraftFromSnippetEmail({
     ]);
 
     if (insertionError) {
-      console.log(`[Draft] WARNING — draft created but DB insert failed:`, insertionError.message);
       return { message: "Insertion Error", completed: true };
     }
 
-    console.log(`[Draft] SUCCESS — draft created for ${toName} <${to}>`);
     return { message: "Draft successfully created", completed: true };
   } catch (err) {
-    console.log(`[Draft] FAILED — exception:`, err.message);
     return { message: "Failed to create draft", completed: false };
   }
 }

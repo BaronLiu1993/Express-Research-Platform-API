@@ -8,18 +8,20 @@ const router = express.Router();
 
 function verifyScraperSecret(req, res, next) {
   const provided = req.get("x-cron-secret");
-  const tsStr = req.get("x-cron-ts");
+  //const tsStr = req.get("x-cron-ts");
   const expected = process.env.SCRAPER_CRON_SECRET;
 
   if (!provided || !expected) {
     return res.status(403).json({ message: "Unauthorized" });
   }
 
-  const ts = Number(tsStr);
+  /**
+   * const ts = Number(tsStr);
   const now = Math.floor(Date.now() / 1000);
   if (!Number.isFinite(ts) || Math.abs(now - ts) > 300) {
     return res.status(403).json({ message: "Stale request" });
   }
+   */
 
   const ok =
     Buffer.from(provided).length === Buffer.from(expected).length &&

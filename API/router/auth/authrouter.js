@@ -32,7 +32,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 router.get("/signup-with-google", async (req, res) => {
-  try {
+  try { 
     const { data: callbackData, error: authError } =
       await supabase.auth.signInWithOAuth({
         provider: "google",
