@@ -38,7 +38,7 @@ jobs:
         env:
           CI: true
           NODE_OPTIONS: "--experimental-vm-modules"
-        run: npx jest --coverage --coverageReporters=text --coverageReporters=lcov --forceExit
+        run: npx jest --coverage --coverageReporters=text --coverageReporters=lcov --forceExit --detectOpenHandles
 
       - name: Upload coverage report
         if: always()
