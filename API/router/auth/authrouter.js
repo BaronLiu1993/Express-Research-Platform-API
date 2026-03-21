@@ -567,7 +567,7 @@ router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
       return res.status(200).json({ message: "Nothing to queue" });
     }
 
-    console.log(watchData);
+
     const jobs = watchData.map((watch) => ({
       name: "refresh-watch-job",
       data: {
@@ -608,7 +608,7 @@ router.post("/register/watch", verifyToken, async (req, res) => {
       },
     });
 
-    console.log(newLabel);
+
 
     const outreachLabelId = newLabel.data.id;
 
@@ -628,7 +628,6 @@ router.post("/register/watch", verifyToken, async (req, res) => {
 
     return res.status(200).json({ message: "success" });
   } catch (err) {
-    console.log(err);
     return res.status(500).json({ message: "internal server error" });
   }
 });

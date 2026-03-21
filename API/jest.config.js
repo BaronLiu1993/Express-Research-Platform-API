@@ -3,6 +3,7 @@ export default {
   transform: {},
   testMatch: ["<rootDir>/tests/**/*.test.js"],
   setupFiles: ["<rootDir>/tests/setup/globalSetup.js"],
+  setupFilesAfterEnv: ["<rootDir>/tests/setup/silenceConsole.js"],
   coverageDirectory: "<rootDir>/coverage",
   collectCoverageFrom: [
     "services/**/*.js",

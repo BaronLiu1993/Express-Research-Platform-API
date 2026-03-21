@@ -173,7 +173,9 @@ async function updateInbox({ historyId, email }) {
 
     console.log(`[InboxWorker] Successfully updated inbox for ${email}`);
   } catch (err) {
-    console.error(`[InboxWorker] Unhandled exception`, err);
+    if (process.env.NODE_ENV !== "test") {
+      console.error(`[InboxWorker] Unhandled exception`, err);
+    }
     throw err;
   }
 }
@@ -191,7 +193,9 @@ export const inboxWorker = new Worker(
         email,
       });
     } catch (err) {
-      console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
+      if (process.env.NODE_ENV !== "test") {
+        console.error(`[Worker] Processor error in job ${job.id}:`, err.message);
+      }
       throw err;
     }
   },
