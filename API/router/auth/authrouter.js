@@ -10,6 +10,13 @@ import dotenv from "dotenv";
 import { configureOAuth } from "../../services/googleServices.js";
 import watchQueue from "../../queue/watch/watchQueue.js";
 import { createClient } from "@supabase/supabase-js";
+import {
+  OAuthCallbackSchema,
+  RefreshTokenSchema,
+  RegisterSchema,
+  UpdateProfileSchema,
+  WatchQueueSchema,
+} from "../../schema/authSchema.js";
 
 dotenv.config();
 
@@ -103,7 +110,11 @@ router.get("/signin-with-google", async (req, res) => {
 });
 
 router.post("/oauth2callback/login", async (req, res) => {
-  const code = req.body.code;
+  const parsed = OAuthCallbackSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "No code provided" });
+  }
+  const code = parsed.data.code;
 
   try {
     const { data: tokenData, error: tokenDataError } =
@@ -170,11 +181,11 @@ router.post("/oauth2callback/login", async (req, res) => {
 
 //Registration
 router.post("/oauth2callback/register", async (req, res) => {
-  const code = req.body.code;
-
-  if (!code) {
+  const parsed = OAuthCallbackSchema.safeParse(req.body);
+  if (!parsed.success) {
     return res.status(400).json({ message: "No code provided" });
   }
+  const code = parsed.data.code;
 
   try {
     const { data: tokenData, error: tokenDataError } =
@@ -246,7 +257,11 @@ router.post("/oauth2callback/register", async (req, res) => {
 });
 
 router.post("/refresh-token", async (req, res) => {
-  const { refreshToken } = req.body;
+  const parsed = RefreshTokenSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(401).json({ message: "Invalid or expired refresh token" });
+  }
+  const { refreshToken } = parsed.data;
   try {
     const { data: tokenData, error: tokenDataError } =
       await supabase.auth.refreshSession({
@@ -269,7 +284,11 @@ router.post("/refresh-token", async (req, res) => {
 });
 
 router.post("/sign-out", async (req, res) => {
-  const { refreshToken } = req.body;
+  const parsed = RefreshTokenSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Missing refresh token" });
+  }
+  const { refreshToken } = parsed.data;
 
   try {
     const { error: signOutError } = await supabase.auth.admin.signOut(
@@ -339,12 +358,11 @@ router.get("/check-profile-completed", verifyToken, async (req, res) => {
 
 //Registration Method
 router.post("/register", verifyToken, async (req, res) => {
-  const {
-    student_major,
-    student_year,
-    student_interests,
-    student_acceptedterms,
-  } = req.body;
+  const parsed = RegisterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Incomplete Information" });
+  }
+  const { student_major, student_year, student_interests, student_acceptedterms } = parsed.data;
 
   const userId = req.user.sub;
   const { data: profileData, error: profileError } = await req.supabaseClient
@@ -361,20 +379,6 @@ router.post("/register", verifyToken, async (req, res) => {
     return res.status(429).json({
       message: "You can only register Once.",
     });
-  }
-
-  if (
-    !student_major ||
-    !student_year ||
-    !student_interests ||
-    !student_acceptedterms ||
-    !userId
-  ) {
-    return res.status(400).json({ message: "Incomplete Information" });
-  }
-
-  if (student_interests.length > 3 || student_interests.length <= 0) {
-    return res.status(400).json({ message: "Invalid Interests" });
   }
 
   try {
@@ -493,7 +497,11 @@ router.get("/fetch-info", verifyToken, async (req, res) => {
 });
 
 router.post("/update-profile", verifyToken, async (req, res) => {
-  const { student_major, student_year, student_interests } = req.body;
+  const parsed = UpdateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Incomplete Information" });
+  }
+  const { student_major, student_year, student_interests } = parsed.data;
   const userId = req.user.sub;
 
   const { data: profile, error: profileError } = await req.supabaseClient
@@ -520,14 +528,6 @@ router.post("/update-profile", verifyToken, async (req, res) => {
         next_allowed_update: nextAllowedUpdate,
       });
     }
-  }
-
-  if (!student_major || !student_year || !student_interests || !userId) {
-    return res.status(400).json({ message: "Incomplete Information" });
-  }
-
-  if (student_interests.length > 3 || student_interests.length <= 0) {
-    return res.status(400).json({ message: "Invalid Interests" });
   }
 
   try {
@@ -557,7 +557,11 @@ router.post("/update-profile", verifyToken, async (req, res) => {
 });
 
 router.post("/register/watch/queue", verifyServerlessCron, async (req, res) => {
-  const { watchData } = req.body;
+  const parsed = WatchQueueSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Invalid request body" });
+  }
+  const { watchData } = parsed.data;
   try {
     if (watchData.length <= 0) {
       return res.status(200).json({ message: "Nothing to queue" });

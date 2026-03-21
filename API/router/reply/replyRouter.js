@@ -1,27 +1,25 @@
 import express from "express";
 import { verifyToken } from "../../services/authServices.js";
 import { sendReply } from "../../services/emailServices.js";
+import { SendReplyBodySchema, ReplyQuerySchema } from "../../schema/replySchema.js";
 
 const router = express.Router();
 
 
 router.post("/send-reply", verifyToken, async (req, res) => {
-  const { messageId } = req.query;
-  const { userEmail, userName, professorEmail, professorName, body, subject, threadId } =
-    req.body;
-  const userId = req.user.sub;
-  if (
-    !userEmail ||
-    !userName ||
-    !professorEmail ||
-    !professorName ||
-    !body ||
-    !messageId ||
-    !subject || 
-    !threadId
-  ) {
+  const queryParsed = ReplyQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
     return res.status(400).json({ message: "Missing Input Fields" });
   }
+  const { messageId } = queryParsed.data;
+
+  const bodyParsed = SendReplyBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    return res.status(400).json({ message: "Missing Input Fields" });
+  }
+  const { userEmail, userName, professorEmail, professorName, body, subject, threadId } =
+    bodyParsed.data;
+  const userId = req.user.sub;
 
 
   try {

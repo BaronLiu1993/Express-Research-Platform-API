@@ -121,7 +121,7 @@ describe("POST /snippets/sync-variables", () => {
       .post("/snippets/sync-variables")
       .send({ variableArray: [], professorIdArray: [] });
     expect(res.status).toBe(400);
-    expect(res.body.message).toBe("User Sent Nothing");
+    expect(res.body.message).toBe("Invalid input arrays");
   });
 
   it("returns 400 when professor fetch fails", async () => {

@@ -2,7 +2,7 @@ import express from "express";
 import { verifyToken } from "../../services/authServices.js";
 import { v4 as uuidv4 } from "uuid";
 import { AuthIdSchema } from "../../schema/authSchema.js";
-import { SnippetSchema } from "../../schema/snippetSchema.js";
+import { SnippetSchema, SyncVariablesSchema } from "../../schema/snippetSchema.js";
 
 const router = express.Router();
 
@@ -61,22 +61,16 @@ router.post("/insert-snippet", verifyToken, async (req, res) => {
 });
 
 router.post("/sync-variables", verifyToken, async (req, res) => {
-  const { variableArray, professorIdArray } = req.body;
   const authParsed = AuthIdSchema.safeParse(req.user);
-
   if (!authParsed.success) {
-    return res.status(401).json({
-      message: "Invalid auth token.",
-    });
+    return res.status(401).json({ message: "Invalid auth token." });
   }
 
-  if (!Array.isArray(variableArray) || !Array.isArray(professorIdArray)) {
+  const bodyParsed = SyncVariablesSchema.safeParse(req.body);
+  if (!bodyParsed.success) {
     return res.status(400).json({ message: "Invalid input arrays" });
   }
-
-  if (variableArray.length === 0 || professorIdArray.length === 0) {
-    return res.status(400).json({ message: "User Sent Nothing" });
-  }
+  const { variableArray, professorIdArray } = bodyParsed.data;
 
   const newVariableArray = variableArray.map(removeBracketPlaceholders);
   const result = [];

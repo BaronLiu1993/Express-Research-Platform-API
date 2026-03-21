@@ -6,15 +6,23 @@ import sendAttachmentsQueue from "../../queue/sendAttachments/sendAttachmentsQue
 import { verifyToken } from "../../services/authServices.js";
 import { configureOAuth, makeBody } from "../../services/googleServices.js";
 import { simpleParser } from "mailparser";
+import {
+  CreateDraftSchema,
+  CreateVariablelessDraftSchema,
+  SendDraftSchema,
+  SendAttachmentsDraftSchema,
+  DraftIdQuerySchema,
+  UpdateDraftBodySchema,
+} from "../../schema/sendSchema.js";
 
 const router = express.Router();
 
 router.post("/create-draft", verifyToken, async (req, res) => {
-  const { professorData, baseBody } = req.body;
-
-  if (professorData.length > 5) {
-    res.status(400).json({ message: "Queueing Too Many" });
+  const parsed = CreateDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Queueing Too Many" });
   }
+  const { professorData, baseBody } = parsed.data;
 
   const userId = req.user.sub;
   try {
@@ -40,10 +48,11 @@ router.post("/create-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/create-variableless-draft", verifyToken, async (req, res) => {
-  const { html, subject, baseBody, professorData } = req.body;
-  if (professorData.length > 5) {
-    res.status(400).json({ message: "Queueing Too Many" });
+  const parsed = CreateVariablelessDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Queueing Too Many" });
   }
+  const { html, subject, baseBody, professorData } = parsed.data;
 
   const userId = req.user.sub;
   try {
@@ -70,11 +79,11 @@ router.post("/create-variableless-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/send-draft", verifyToken, async (req, res) => {
-  const { userEmail, userName, professorData, labelId } = req.body;
-  
-  if (professorData.length > 5) {
-    res.status(400).json({ message: "Queueing Too Many Emails" });
+  const parsed = SendDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Queueing Too Many Emails" });
   }
+  const { userEmail, userName, professorData, labelId } = parsed.data;
   const userId = req.user.sub;
   try {
     const jobs = professorData.map((professor) => ({
@@ -101,33 +110,13 @@ router.post("/send-draft", verifyToken, async (req, res) => {
 });
 
 router.post("/send-attachments-draft", verifyToken, async (req, res) => {
-  const {
-    userEmail,
-    userName,
-    professorData,
-    labelId,
-    sendResume,
-    sendTranscript,
-  } = req.body;
-  if (professorData.length > 5) {
-    res.status(400).json({ message: "Queueing Too Many Emails" });
-  }
-
-  console.log(sendResume)
-  console.log(sendTranscript)
-
-  if (
-    !userEmail ||
-    !userName ||
-    !professorData ||
-    !labelId ||
-    typeof sendResume !== "boolean" ||
-    typeof sendTranscript !== "boolean"
-  ) {
+  const parsed = SendAttachmentsDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
     return res.status(400).json({
       message: "Missing or invalid required fields",
     });
   }
+  const { userEmail, userName, professorData, labelId, sendResume, sendTranscript } = parsed.data;
 
   const userId = req.user.sub;
   try {
@@ -175,7 +164,11 @@ router.get("/get-drafts", verifyToken, async (req, res) => {
 
 router.get("/get-singular-draft", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const { draftId } = req.query;
+  const queryParsed = DraftIdQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return res.status(400).json({ message: "Missing draft ID" });
+  }
+  const { draftId } = queryParsed.data;
 
   try {
     const gmail = await configureOAuth({
@@ -214,8 +207,16 @@ router.get("/get-singular-draft", verifyToken, async (req, res) => {
 
 router.put("/update-draft", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const { draftId } = req.query;
-  const { to, fromEmail, fromName, subject, body } = req.body;
+  const queryParsed = DraftIdQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return res.status(400).json({ updated: false, message: "Missing draft ID" });
+  }
+  const { draftId } = queryParsed.data;
+  const bodyParsed = UpdateDraftBodySchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    return res.status(400).json({ updated: false, message: "Invalid request body" });
+  }
+  const { to, fromEmail, fromName, subject, body } = bodyParsed.data;
   try {
     const gmail = await configureOAuth({
       userId,
@@ -245,7 +246,11 @@ router.put("/update-draft", verifyToken, async (req, res) => {
 });
 
 router.delete("/delete-draft", verifyToken, async (req, res) => {
-  const { draftId } = req.query;
+  const queryParsed = DraftIdQuerySchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return res.status(400).json({ message: "Missing draft ID" });
+  }
+  const { draftId } = queryParsed.data;
   const userId = req.user.sub;
   try {
     const gmail = await configureOAuth({

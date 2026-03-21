@@ -1,5 +1,11 @@
 import express from "express";
 import { verifyToken } from "../../services/authServices.js";
+import {
+  ProfessorIdParamSchema,
+  ChangeStatusSchema,
+  SaveProfessorSchema,
+  SavedPageSchema,
+} from "../../schema/savedSchema.js";
 
 const router = express.Router();
 
@@ -25,7 +31,8 @@ router.get("/repository/get-all-savedId", verifyToken, async (req, res) => {
 
 router.get("/kanban/get-saved", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const pageParsed = SavedPageSchema.safeParse(req.query);
+  const page = pageParsed.success ? pageParsed.data.page : 1;
   const limit = 30;
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -51,8 +58,16 @@ router.put(
   verifyToken,
   async (req, res) => {
     const userId = req.user.sub;
-    const { professorId } = req.params;
-    const { status } = req.body;
+    const paramsParsed = ProfessorIdParamSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return res.status(400).json({ completed: false, message: "Invalid professor ID." });
+    }
+    const { professorId } = paramsParsed.data;
+    const bodyParsed = ChangeStatusSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return res.status(400).json({ completed: false, message: "Invalid status." });
+    }
+    const { status } = bodyParsed.data;
     try {
       const { error: savedUpdateError } = await req.supabaseClient
         .from("Saved")
@@ -81,18 +96,17 @@ router.put(
 
 router.post("/kanban/add-saved/:professorId", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const { professorId } = req.params;
-  const {
-    name,
-    email,
-    url,
-    lab_url,
-    research_interests,
-    labs,
-    department,
-    faculty,
-    school,
-  } = req.body;
+  const paramsParsed = ProfessorIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    return res.status(400).json({ message: "Invalid professor ID." });
+  }
+  const { professorId } = paramsParsed.data;
+  const bodyParsed = SaveProfessorSchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    return res.status(400).json({ message: "Invalid request body." });
+  }
+  const { name, email, url, lab_url, research_interests, labs, department, faculty, school } =
+    bodyParsed.data;
   try {
     const { error: savedInsertionError } = await req.supabaseClient
       .from("Saved")
@@ -125,14 +139,12 @@ router.delete(
   "/kanban/remove-saved/:professorId",
   verifyToken,
   async (req, res) => {
-    const { professorId } = req.params;
-    const userId = req.user.sub;
-
-    if (!professorId || !userId) {
-      return res
-        .status(400)
-        .json({ message: "Professor ID and User ID is required." });
+    const paramsParsed = ProfessorIdParamSchema.safeParse(req.params);
+    if (!paramsParsed.success) {
+      return res.status(400).json({ message: "Professor ID and User ID is required." });
     }
+    const { professorId } = paramsParsed.data;
+    const userId = req.user.sub;
     try {
       const { error: savedDeletionError } = await req.supabaseClient
         .from("Saved")

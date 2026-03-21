@@ -6,6 +6,7 @@ import { simpleParser } from "mailparser";
 import { configureOAuth } from "../../services/googleServices.js";
 import { verifyPubSubJwt } from "../../services/authServices.js";
 import inboxQueue from "../../queue/inbox/inboxQueue.js";
+import { ThreadIdSchema, PageSchema, GetEmailQuerySchema } from "../../schema/inboxSchema.js";
 
 dotenv.config();
 
@@ -39,7 +40,11 @@ router.post("/mail-webhook", async (req, res) => {
 });
 
 router.post("/seen", verifyToken, async (req, res) => {
-  const threadId = req.query.threadId;
+  const queryParsed = ThreadIdSchema.safeParse(req.query);
+  if (!queryParsed.success) {
+    return res.status(400).json({ message: "Invalid thread ID" });
+  }
+  const { threadId } = queryParsed.data;
   try {
     const { error: updateError } = await req.supabaseClient
       .from("Messages")
@@ -59,7 +64,8 @@ router.post("/seen", verifyToken, async (req, res) => {
 
 router.get("/get-threads", verifyToken, async (req, res) => {
   const userId = req.user.sub;
-  const page = Number(req.query.page) || 1;
+  const pageParsed = PageSchema.safeParse(req.query);
+  const page = pageParsed.success ? pageParsed.data.page : 1;
   const limit = 10;
   const offset = (page - 1) * limit;
   try {
@@ -100,7 +106,11 @@ router.get("/get-threads", verifyToken, async (req, res) => {
 });
 
 router.get("/get-email-previews", verifyToken, async (req, res) => {
-  const { threadId } = req.query;
+  const threadParsed = ThreadIdSchema.safeParse(req.query);
+  if (!threadParsed.success) {
+    return res.status(400).json({ message: "Invalid thread ID" });
+  }
+  const { threadId } = threadParsed.data;
   const userId = req.user.sub;
   try {
     const gmail = await configureOAuth({
@@ -124,7 +134,11 @@ router.get("/get-email-previews", verifyToken, async (req, res) => {
 });
 
 router.get("/get-email", verifyToken, async (req, res) => {
-  const { messageId, fromUser } = req.query;
+  const emailParsed = GetEmailQuerySchema.safeParse(req.query);
+  if (!emailParsed.success) {
+    return res.status(400).json({ message: "Invalid query parameters" });
+  }
+  const { messageId, fromUser } = emailParsed.data;
   const userId = req.user.sub;
 
   try {

@@ -308,7 +308,7 @@ describe("POST /auth/register", () => {
       student_acceptedterms: true,
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid Interests");
+    expect(res.body.message).toBe("Incomplete Information");
   });
 
   it("returns 500 when embedding fails", async () => {
