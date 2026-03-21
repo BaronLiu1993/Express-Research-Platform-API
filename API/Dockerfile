@@ -1,17 +1,12 @@
-# Use official Node image
-FROM node:alpine
+FROM node:20-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy all files
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 COPY . .
 
-# Install dependencies
-RUN npm install
+EXPOSE 8080
 
-# Start the app
-CMD ["npm", "start"]
-
-# Expose port
-EXPOSE 443
+CMD ["node", "index.js"]
