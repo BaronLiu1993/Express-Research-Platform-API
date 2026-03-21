@@ -14,9 +14,6 @@ export const scrapeWorker = new Worker(
       );
       return result;
     } catch (err) {
-      if (process.env.NODE_ENV !== "test") {
-        console.error(`[ScrapeWorker] Job ${job.id} failed:`, err.message);
-      }
       throw err;
     }
   },

@@ -12,7 +12,7 @@ import "./queue/inbox/inboxWorker.js"
 import "./queue/watch/watchWorker.js"
 import "./queue/scrape/scrapeWorker.js"
 
-import authRouter from "./router/auth/authrouter.js";
+import authRouter from "./router/auth/authRouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";
 import savedRouter from "./router/saved/savedRouter.js";
 import snippetRouter from "./router/snippet/snippetRouter.js";
