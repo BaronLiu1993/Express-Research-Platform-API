@@ -10,6 +10,7 @@ import "./queue/variablelessDrafts/variablelessWorker.js"
 import "./queue/sendAttachments/sendAttachmentsWorker.js"
 import "./queue/inbox/inboxWorker.js"
 import "./queue/watch/watchWorker.js"
+import "./queue/scrape/scrapeWorker.js"
 
 import authRouter from "./router/auth/authrouter.js";
 import repositoryRouter from "./router/repository/repositoryRouter.js";
@@ -20,6 +21,7 @@ import inboxRouter from "./router/inbox/inboxRouter.js";
 import engagementRouter from "./router/engagement/engagementRouter.js";
 import replyRouter from "./router/reply/replyRouter.js";
 import storageRouter from "./router/storage/storageRouter.js"
+import scraperRouter from "./router/scraper/scraperRouter.js"
 
 dotenv.config();
 const app = express();
@@ -55,6 +57,7 @@ app.use("/inbox", inboxRouter);
 app.use("/engagement", engagementRouter);
 app.use("/reply", replyRouter);
 app.use("/storage", storageRouter)
+app.use("/scraper", scraperRouter)
 
 app.listen(process.env.PORT, () => {
   console.log(`Server Started`);
