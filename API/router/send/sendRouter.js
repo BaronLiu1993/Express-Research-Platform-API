@@ -19,6 +19,7 @@ const router = express.Router();
 
 router.post("/create-draft", verifyToken, async (req, res) => {
   const parsed = CreateDraftSchema.safeParse(req.body);
+
   if (!parsed.success) {
     return res.status(400).json({ message: "Queueing Too Many" });
   }
@@ -43,6 +44,7 @@ router.post("/create-draft", verifyToken, async (req, res) => {
     await draftQueue.addBulk(jobs);
     res.status(200).json({ message: "Bulk emails queued", count: jobs.length });
   } catch (err) {
+    console.log(err)
     res.status(500).json({ message: "Failed to queue bulk emails" });
   }
 });

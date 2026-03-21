@@ -25,7 +25,7 @@ const router = express.Router();
 const scopes = [
   "email",
   "profile",
-  //"https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.modify",
 ];
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

@@ -4,7 +4,7 @@ const ProfessorDraftItem = z.object({
   id: z.number(),
   email: z.string().email(),
   name: z.string().min(1),
-  dynamicFields: z.record(z.string()).optional(),
+  dynamicFields: z.any().optional(),
 });
 
 const ProfessorSendItem = z.object({
@@ -16,14 +16,14 @@ const ProfessorSendItem = z.object({
 
 export const CreateDraftSchema = z.object({
   professorData: z.array(ProfessorDraftItem).min(1).max(5),
-  baseBody: z.object({}).passthrough(),
+  baseBody: z.any(),
 });
 
 export const CreateVariablelessDraftSchema = z.object({
   html: z.string().min(1),
   subject: z.string().min(1),
   professorData: z.array(ProfessorDraftItem).min(1).max(5),
-  baseBody: z.object({}).passthrough(),
+  baseBody: z.any(),
 });
 
 export const SendDraftSchema = z.object({
