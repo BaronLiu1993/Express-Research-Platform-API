@@ -86,7 +86,7 @@ jest.unstable_mockModule("../../../services/googleServices.js", () => ({
 
 jest.unstable_mockModule("../../../queue/watch/watchQueue.js", () => ({ default: mockWatchQueue }));
 
-const { default: authRouter } = await import("../../../router/auth/authrouter.js");
+const { default: authRouter } = await import("../../../router/auth/authRouter.js");
 const { createTestApp } = await import("../../setup/testApp.js");
 
 const app = createTestApp(["/auth", authRouter]);
