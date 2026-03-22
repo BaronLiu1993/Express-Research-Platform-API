@@ -149,18 +149,24 @@ router.post("/send-attachments-draft", verifyToken, async (req, res) => {
 
 router.get("/get-drafts", verifyToken, async (req, res) => {
   const userId = req.user.sub;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = 50;
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
   try {
     const { data: draftsData, error: draftError } = await req.supabaseClient
       .from("Emails")
       .select("*")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .range(from, to);
     if (draftError) {
       return res.status(400).json({ message: "Failed To Fetch Drafts" });
     }
 
-    return res.status(200).json({ data: draftsData });
+    const has_more = draftsData.length > 50;
+    return res.status(200).json({ data: draftsData, has_more, page });
   } catch (err) {
-    res.status(500).json({ message: "Failed to queue bulk emails" });
+    res.status(500).json({ message: "Failed to fetch drafts" });
   }
 });
 

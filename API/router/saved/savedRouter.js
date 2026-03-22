@@ -47,7 +47,8 @@ router.get("/kanban/get-saved", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Unable to Fetch Data" });
     }
 
-    return res.status(200).json({ data: savedData });
+    const has_more = savedData.length > 50;
+    return res.status(200).json({ data: savedData, has_more, page });
   } catch (e) {
     return res.status(500).json({ message: "Internal Service Error" });
   }
