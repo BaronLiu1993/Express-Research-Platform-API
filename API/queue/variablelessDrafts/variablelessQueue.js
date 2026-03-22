@@ -14,4 +14,4 @@ const variablelessDraftQueue = new Queue('generate-variableless-draft', {
     },
   });
 
-  export default variablelessDraftQueue
+export default variablelessDraftQueue
