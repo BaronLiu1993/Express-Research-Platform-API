@@ -31,6 +31,7 @@ const mockChain = {
   select: jest.fn(),
   delete: jest.fn(),
   eq: jest.fn(),
+  range: jest.fn(),
   single: jest.fn(),
 };
 Object.values(mockChain).forEach((fn) => { if (typeof fn?.mockReturnValue === "function") fn.mockReturnValue(mockChain); });
