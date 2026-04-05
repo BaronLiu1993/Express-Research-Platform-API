@@ -1,6 +1,6 @@
 # Palette Backend
 
-Automates research internship outreach via Gmail — draft creation, bulk sending, attachment handling, inbox sync, open tracking, and professor discovery via automated scraping.
+Automates research internship outreach via Gmail draft creation, bulk sending, attachment handling, inbox sync, open tracking, and professor discovery via automated scraping.
 
 ## Tech Stack
 
